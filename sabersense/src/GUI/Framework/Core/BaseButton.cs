@@ -9,8 +9,8 @@ using UnityEngine.UI;
 namespace SaberSense.GUI.Framework.Core;
 
 public class PointerEventHandler : MonoBehaviour,
-    IPointerEnterHandler, IPointerExitHandler, IPointerClickHandler,
-    IPointerDownHandler, IPointerUpHandler
+IPointerEnterHandler, IPointerExitHandler, IPointerClickHandler,
+IPointerDownHandler, IPointerUpHandler
 {
     public Action? OnEnter;
 
@@ -36,7 +36,7 @@ public class PointerEventHandler : MonoBehaviour,
         {
             var mask = GetComponentInParent<Mask>();
             if (mask != null)
-                ClipRect = mask.rectTransform;
+            ClipRect = mask.rectTransform;
         }
     }
 
@@ -45,8 +45,8 @@ public class PointerEventHandler : MonoBehaviour,
         if (ClipRect == null) return false;
 
         var cam = eventData.pointerCurrentRaycast.module != null
-            ? eventData.pointerCurrentRaycast.module.eventCamera
-            : eventData.pressEventCamera;
+        ? eventData.pointerCurrentRaycast.module.eventCamera
+        : eventData.pressEventCamera;
         return !RectTransformUtility.RectangleContainsScreenPoint(ClipRect, eventData.position, cam);
     }
 
@@ -108,13 +108,13 @@ public class BaseButton : UIElement
         le.preferredHeight = DefaultHeight;
 
         Background = new UIImage("Background")
-            .SetColor(UITheme.Border);
+        .SetColor(UITheme.Border);
         Background.RectTransform.SetParent(RectTransform, false);
         Background.SetAnchors(Vector2.zero, Vector2.one);
         Background.ImageComponent.raycastTarget = true;
 
         var innerFill = new UIImage("InnerFill")
-            .SetColor(UITheme.InnerBorder);
+        .SetColor(UITheme.InnerBorder);
         innerFill.RectTransform.SetParent(RectTransform, false);
         innerFill.SetAnchors(Vector2.zero, Vector2.one);
         innerFill.RectTransform.offsetMin = new Vector2(OuterBorderInset, OuterBorderInset);

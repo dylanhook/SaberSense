@@ -14,9 +14,9 @@ internal static class VRRaycasterHelper
     static VRRaycasterHelper()
     {
         PhysicsRaycasterField = typeof(VRGraphicRaycaster).GetField(
-            "_physicsRaycaster", BindingFlags.NonPublic | BindingFlags.Instance);
+        "_physicsRaycaster", BindingFlags.NonPublic | BindingFlags.Instance);
         if (PhysicsRaycasterField is null)
-            ModLogger.ForSource("VRRaycaster").Warn("VRGraphicRaycaster._physicsRaycaster field not found - VR pointer may not work.");
+        ModLogger.ForSource("VRRaycaster").Warn("VRGraphicRaycaster._physicsRaycaster field not found - VR pointer may not work.");
     }
 
     public static void SetPhysicsRaycaster(VRGraphicRaycaster target, object physicsRaycaster)

@@ -11,7 +11,7 @@ internal sealed class IPALoggerAdapter : IModLogger
     private readonly Logger _inner;
 
     public IPALoggerAdapter(Logger logger) =>
-        _inner = logger ?? throw new ArgumentNullException(nameof(logger));
+    _inner = logger ?? throw new ArgumentNullException(nameof(logger));
 
     public void Debug(string message) => _inner.Debug(message);
     public void Info(string message) => _inner.Info(message);
@@ -20,7 +20,7 @@ internal sealed class IPALoggerAdapter : IModLogger
     public void Error(Exception exception) => _inner.Error(exception);
 
     public IModLogger ForSource(string source) =>
-        throw new InvalidOperationException(
-            $"ForSource(\"{source}\") called on raw IPALoggerAdapter. " +
-            "Use LoggingLogger.ForSource instead - the adapter must be wrapped by LoggingLogger for sinks to work.");
+    throw new InvalidOperationException(
+    $"ForSource(\"{source}\") called on raw IPALoggerAdapter. " +
+    "Use LoggingLogger.ForSource instead - the adapter must be wrapped by LoggingLogger for sinks to work.");
 }

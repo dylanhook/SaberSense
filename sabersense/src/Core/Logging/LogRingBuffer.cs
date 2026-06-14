@@ -41,7 +41,7 @@ internal sealed class LogRingBuffer : ILogSink
             {
                 var entry = _buffer[(start + i) % Capacity];
                 if (entry.Level >= minLevel)
-                    result.Add(entry);
+                result.Add(entry);
             }
             return result;
         }

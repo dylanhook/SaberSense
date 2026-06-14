@@ -39,7 +39,7 @@ public static class UIGradient
             float t = (float)y / (height - 1);
             Color c = Color.Lerp(bottom, top, t);
             for (int x = 0; x < width; x++)
-                tex.SetPixel(x, y, c);
+            tex.SetPixel(x, y, c);
         }
         tex.Apply();
         return tex;
@@ -56,7 +56,7 @@ public static class UIGradient
             float t = (float)x / (width - 1);
             Color c = Color.Lerp(left, right, t);
             for (int y = 0; y < height; y++)
-                tex.SetPixel(x, y, c);
+            tex.SetPixel(x, y, c);
         }
         tex.Apply();
         return tex;
@@ -87,7 +87,7 @@ public static class UIGradient
             {
                 Color c = Color.Lerp(bot, top, y / 31f);
                 for (int x = 0; x < 4; x++)
-                    _accentVertTex.SetPixel(x, y, c);
+                _accentVertTex.SetPixel(x, y, c);
             }
             _accentVertTex.Apply();
         }
@@ -111,6 +111,28 @@ public static class UIGradient
         }
     }
 
+    public static void ClearCache()
+    {
+        DestroyPair(ref _panelGradientTex, ref _panelGradientSpr);
+        DestroyPair(ref _accentGlowTex, ref _accentGlowSpr);
+        DestroyPair(ref _btnNormalTex, ref _btnNormalSpr);
+        DestroyPair(ref _btnHoverTex, ref _btnHoverSpr);
+        DestroyPair(ref _btnPressedTex, ref _btnPressedSpr);
+        DestroyPair(ref _tglUncheckedTex, ref _tglUncheckedSpr);
+        DestroyPair(ref _tglHoverTex, ref _tglHoverSpr);
+        DestroyPair(ref _sldNormalTex, ref _sldNormalSpr);
+        DestroyPair(ref _sldHoverTex, ref _sldHoverSpr);
+        DestroyPair(ref _cmbNormalTex, ref _cmbNormalSpr);
+        DestroyPair(ref _cmbHoverTex, ref _cmbHoverSpr);
+        DestroyPair(ref _accentVertTex, ref _accentVertSpr);
+    }
+
+    private static void DestroyPair(ref Texture2D? tex, ref Sprite? spr)
+    {
+        if (spr != null) { UnityEngine.Object.Destroy(spr); spr = null; }
+        if (tex != null) { UnityEngine.Object.Destroy(tex); tex = null; }
+    }
+
     public static Sprite PanelGradient
     {
         get
@@ -118,8 +140,8 @@ public static class UIGradient
             if (_panelGradientSpr == null)
             {
                 _panelGradientTex = Create(4, 64,
-                    new Color(0.12f, 0.13f, 0.18f, 0.97f),
-                    new Color(0.04f, 0.04f, 0.07f, 0.99f));
+                new Color(0.12f, 0.13f, 0.18f, 0.97f),
+                new Color(0.04f, 0.04f, 0.07f, 0.99f));
                 _panelGradientSpr = Sprite.Create(_panelGradientTex, new Rect(0, 0, 4, 64), new Vector2(0.5f, 0.5f));
             }
             return _panelGradientSpr;

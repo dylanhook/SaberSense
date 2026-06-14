@@ -1,7 +1,7 @@
 // Copyright (c) 2026 dylanhook. All rights reserved.
 // Licensed under the SaberSense Proprietary License. See LICENSE file in the project root.
 
-using SaberSense.Profiles;
+using SaberSense.Core;
 using SaberSense.Rendering;
 using UnityEngine;
 
@@ -32,7 +32,7 @@ internal sealed class GripAttachment
     }
 
     public Transform GetMount(SaberHand hand)
-        => hand == SaberHand.Left ? LeftMount : RightMount;
+    => hand == SaberHand.Left ? LeftMount : RightMount;
 
     public void Attach(LiveSaber saber, SaberHand hand)
     {

@@ -19,8 +19,6 @@ internal sealed class SaberModifierHost : MonoBehaviour
 
     internal VisibilityRule[] VisibilityRules = [];
 
-    internal ComponentRule[] ComponentRules = [];
-
     internal TransformRule[] TransformRules = [];
 
     private bool _initialized;
@@ -34,7 +32,7 @@ internal sealed class SaberModifierHost : MonoBehaviour
     public bool Initialize()
     {
         if (string.IsNullOrEmpty(ModifierJson) || _initialized)
-            return _initialized;
+        return _initialized;
 
         DeserializeRules();
         ResolveTargets();
@@ -64,21 +62,12 @@ internal sealed class SaberModifierHost : MonoBehaviour
                 Id = t.Id,
                 TargetIndices = t.ObjectIndecies ?? []
             }).ToArray() ?? [];
-
-            ComponentRules = payload.ComponentModifiers?.Select(c => new ComponentRule
-            {
-                Name = c.Name!,
-                Id = c.Id,
-                ComponentTypeName = c.ComponentType!,
-                TargetObjectIndex = c.ObjectIndex
-            }).ToArray() ?? [];
         }
         catch (System.Exception ex)
         {
             ModLogger.ForSource("SaberModifierHost").Warn($"JSON deserialization failed: {ex.Message}");
             VisibilityRules ??= [];
             TransformRules ??= [];
-            ComponentRules ??= [];
         }
     }
 
@@ -92,44 +81,33 @@ internal sealed class SaberModifierHost : MonoBehaviour
         foreach (var name in TargetObjectNames)
         {
             if (!string.IsNullOrEmpty(name) && lookup.TryGetValue(name, out var go))
-                resolved.Add(go);
+            resolved.Add(go);
             else
-                resolved.Add(null);
+            resolved.Add(null);
         }
 
         foreach (var rule in VisibilityRules)
-            rule.Targets = ResolveIndices(rule.TargetIndices, resolved);
+        rule.Targets = ResolveIndices(rule.TargetIndices, resolved);
 
         foreach (var rule in TransformRules)
-            rule.Targets = ResolveIndices(rule.TargetIndices, resolved);
-
-        if (ComponentRules is not null)
-        {
-            foreach (var rule in ComponentRules)
-            {
-                if (rule.TargetObjectIndex >= 0 && rule.TargetObjectIndex < resolved.Count)
-                    rule.Target = resolved[rule.TargetObjectIndex];
-            }
-        }
+        rule.Targets = ResolveIndices(rule.TargetIndices, resolved);
     }
 
     public IEnumerable<(int Id, object Rule)> EnumerateAllRules()
     {
         if (VisibilityRules is not null)
-            foreach (var v in VisibilityRules) yield return (v.Id, v);
+        foreach (var v in VisibilityRules) yield return (v.Id, v);
         if (TransformRules is not null)
-            foreach (var t in TransformRules) yield return (t.Id, t);
-        if (ComponentRules is not null)
-            foreach (var c in ComponentRules) yield return (c.Id, c);
+        foreach (var t in TransformRules) yield return (t.Id, t);
     }
 
     private static List<GameObject?> ResolveIndices(List<int> indices, List<GameObject?> resolved)
     {
         if (indices is null) return [];
         return indices
-            .Where(i => i >= 0 && i < resolved.Count)
-            .Select(i => resolved[i])
-            .ToList();
+        .Where(i => i >= 0 && i < resolved.Count)
+        .Select(i => resolved[i])
+        .ToList();
     }
 
     private Dictionary<string, GameObject> BuildHierarchyLookup()
@@ -153,7 +131,6 @@ internal sealed class SaberModifierHost : MonoBehaviour
     {
         [Newtonsoft.Json.JsonProperty] public List<VisibilityEntry>? VisibilityModifiers = null;
         [Newtonsoft.Json.JsonProperty] public List<TransformEntry>? TransformModifiers = null;
-        [Newtonsoft.Json.JsonProperty] public List<ComponentEntry>? ComponentModifiers = null;
     }
 
     private sealed class VisibilityEntry
@@ -169,13 +146,5 @@ internal sealed class SaberModifierHost : MonoBehaviour
         [Newtonsoft.Json.JsonProperty] public string? Name = null;
         [Newtonsoft.Json.JsonProperty] public int Id = 0;
         [Newtonsoft.Json.JsonProperty] public List<int>? ObjectIndecies = null;
-    }
-
-    private sealed class ComponentEntry
-    {
-        [Newtonsoft.Json.JsonProperty] public string? Name = null;
-        [Newtonsoft.Json.JsonProperty] public int Id = 0;
-        [Newtonsoft.Json.JsonProperty] public string? ComponentType = null;
-        [Newtonsoft.Json.JsonProperty] public int ObjectIndex = 0;
     }
 }

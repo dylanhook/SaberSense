@@ -15,8 +15,8 @@ public static class AssetPaths
         var full = Path.GetFullPath(Path.Combine(UnityGame.InstallPath, relative));
         var root = UnityGame.InstallPath;
         if (!full.StartsWith(root + Path.DirectorySeparatorChar, System.StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(full, root, System.StringComparison.OrdinalIgnoreCase))
-            throw new System.InvalidOperationException($"Path traversal blocked: {relative}");
+        !string.Equals(full, root, System.StringComparison.OrdinalIgnoreCase))
+        throw new System.InvalidOperationException($"Path traversal blocked: {relative}");
         return full;
     }
 
@@ -24,7 +24,7 @@ public static class AssetPaths
     {
         var root = UnityGame.InstallPath;
         if (absolute.StartsWith(root, System.StringComparison.OrdinalIgnoreCase))
-            return absolute[(root.Length + 1)..];
+        return absolute[(root.Length + 1)..];
         return absolute;
     }
 
@@ -34,29 +34,20 @@ public static class AssetPaths
         var segments = normalized.Split(Path.DirectorySeparatorChar);
 
         if (segments.Length is < 3)
-            return string.Empty;
+        return string.Empty;
 
         return string.Join(
-            Path.DirectorySeparatorChar.ToString(),
-            segments, 1, segments.Length - 2);
+        Path.DirectorySeparatorChar.ToString(),
+        segments, 1, segments.Length - 2);
     }
 
     public static string RemoveRootPrefix(string path)
     {
         if (string.IsNullOrEmpty(PrefixToStrip))
-            return path;
+        return path;
 
         return path.StartsWith(PrefixToStrip!, System.StringComparison.OrdinalIgnoreCase)
-            ? path[PrefixToStrip!.Length..]
-            : path;
+        ? path[PrefixToStrip!.Length..]
+        : path;
     }
-
-    public static FileInfo GetFile(this DirectoryInfo dir, string name) =>
-        new(Path.Combine(dir.FullName, name));
-
-    public static DirectoryInfo GetDirectory(
-        this DirectoryInfo dir, string name, bool create = false) =>
-        create
-            ? dir.CreateSubdirectory(name)
-            : new DirectoryInfo(Path.Combine(dir.FullName, name));
 }

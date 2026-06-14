@@ -10,11 +10,11 @@ namespace SaberSense.Gameplay;
 
 internal sealed class PlatformHider : IInitializable
 {
-    [Inject] private readonly ModSettings _config = null!;
+    [Inject] private readonly ModSettings _settings = null!;
 
     public void Initialize()
     {
-        if (!_config.HidePlatform) return;
+        if (!_settings.HidePlatform) return;
 
         var go = new GameObject("SaberSense_PlatformHider");
         var runner = go.AddComponent<CoroutineRunner>();
@@ -31,12 +31,12 @@ internal sealed class PlatformHider : IInitializable
             foreach (Transform child in playersPlace.transform)
             {
                 if (child.name != "Feet")
-                    child.gameObject.SetActive(false);
+                child.gameObject.SetActive(false);
             }
         }
 
         if (runner != null)
-            Object.Destroy(runner.gameObject);
+        Object.Destroy(runner.gameObject);
     }
 
     private sealed class CoroutineRunner : MonoBehaviour { }

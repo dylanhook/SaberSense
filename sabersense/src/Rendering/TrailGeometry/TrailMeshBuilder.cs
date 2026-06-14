@@ -59,14 +59,14 @@ internal sealed class TrailMeshBuilder
     }
 
     public void Update(
-        Mesh mesh,
-        SnapshotRingBuffer buffer,
-        Vector3 playerOffset,
-        bool localSpaceTrails,
-        float trailWidth,
-        float whiteStep,
-        Color color,
-        Bounds hugeBounds)
+    Mesh mesh,
+    SnapshotRingBuffer buffer,
+    Vector3 playerOffset,
+    bool localSpaceTrails,
+    float trailWidth,
+    float whiteStep,
+    Color color,
+    Bounds hugeBounds)
     {
         float halfWidth = trailWidth * 0.5f;
         float tDenominator = Granularity > 1 ? Granularity - 1 : 1;
@@ -74,15 +74,14 @@ internal sealed class TrailMeshBuilder
         for (int i = 0; i < Granularity; i++)
         {
             float t = i / tDenominator;
-            var pos = CatmullRomInterpolator.Sample(buffer, t, false);
+            CatmullRomInterpolator.Sample(buffer, t, out var pos, out var rawUp);
             if (localSpaceTrails) pos += playerOffset;
 
-            var rawUp = CatmullRomInterpolator.Sample(buffer, t, true);
             var up = rawUp.sqrMagnitude > 1e-6f ? rawUp.normalized : Vector3.up;
 
             var c = whiteStep > 0 && t < whiteStep
-                ? Color.LerpUnclamped(Color.white, color, t / whiteStep)
-                : color;
+            ? Color.LerpUnclamped(Color.white, color, t / whiteStep)
+            : color;
 
             int b = i * 2;
 

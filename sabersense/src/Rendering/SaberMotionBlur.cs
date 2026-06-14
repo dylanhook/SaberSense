@@ -1,6 +1,7 @@
 // Copyright (c) 2026 dylanhook. All rights reserved.
 // Licensed under the SaberSense Proprietary License. See LICENSE file in the project root.
 
+using CameraUtils.Core;
 using SaberSense.Core.Logging;
 using System.Collections.Generic;
 using UnityEngine;
@@ -9,7 +10,7 @@ using UnityEngine.Rendering;
 namespace SaberSense.Rendering;
 
 [DefaultExecutionOrder(10000)]
-internal sealed class SaberMotionBlur : MonoBehaviour
+internal sealed class SaberMotionBlur : MonoBehaviour, ISaberEffect
 {
     public float Strength { get; set; } = 50f;
 
@@ -41,6 +42,8 @@ internal sealed class SaberMotionBlur : MonoBehaviour
     private const int AngVelSampleCount = 3;
     private const float DefaultProfileRadius = 0.01f;
 
+    private static readonly Bounds HugeBounds = new(Vector3.zero, new Vector3(100000f, 100000f, 100000f));
+
     private int _frameNum;
     private int _layer = SaberLayer;
 
@@ -54,8 +57,11 @@ internal sealed class SaberMotionBlur : MonoBehaviour
     private float _minZ, _maxZ;
     private float[]? _profileRadius;
     private Color[]? _colorStrip;
-    private bool _hasCaptured;
+    private bool _colorDirty = true;
+    private bool _boundsDirty = true;
     private Matrix4x4 _rootInverse;
+
+    private readonly Dictionary<int, Color[]?> _texStripCache = new();
 
     private Mesh _sweepMesh = null!;
     private GameObject _sweepObj = null!;
@@ -75,7 +81,7 @@ internal sealed class SaberMotionBlur : MonoBehaviour
         foreach (var r in allRenderers)
         {
             if (r is MeshRenderer || r is SkinnedMeshRenderer)
-                meshRenderers.Add(r);
+            meshRenderers.Add(r);
         }
         _saberRenderers = meshRenderers.ToArray();
 
@@ -99,7 +105,7 @@ internal sealed class SaberMotionBlur : MonoBehaviour
         mr2.receiveShadows = false;
         mr2.sharedMaterial = _sweepMaterial;
 
-        _sweepMesh = new Mesh { bounds = new Bounds(Vector3.zero, Vector3.one * 100000f) };
+        _sweepMesh = new Mesh { bounds = HugeBounds };
         _sweepMesh.MarkDynamic();
         mfComp.sharedMesh = _sweepMesh;
     }
@@ -134,12 +140,20 @@ internal sealed class SaberMotionBlur : MonoBehaviour
             return;
         }
 
-        if (!_hasCaptured && _frameNum >= ColorCaptureFrameDelay)
+        if (_colorDirty && _frameNum >= ColorCaptureFrameDelay)
         {
-            RecalculateBounds();
+            if (_boundsDirty)
+            {
+                RecalculateBounds();
+                _boundsDirty = false;
+            }
+            else if (_saberRoot != null)
+            {
+                _rootInverse = _saberRoot.worldToLocalMatrix;
+            }
             _colorStrip = MotionBlurColorSampler.Sample(
-                _saberRenderers, _rootInverse, _minZ, _maxZ);
-            _hasCaptured = true;
+            _saberRenderers, _rootInverse, _minZ, _maxZ, _texStripCache);
+            _colorDirty = false;
         }
 
         _history.Record(transform.position, transform.rotation, transform.lossyScale);
@@ -148,7 +162,7 @@ internal sealed class SaberMotionBlur : MonoBehaviour
         float angVel = 0f;
         int samples = Mathf.Min(_history.Count - 1, AngVelSampleCount);
         for (int i = 0; i < samples; i++)
-            angVel += Quaternion.Angle(_history.Rot(i), _history.Rot(i + 1));
+        angVel += Quaternion.Angle(_history.Rot(i), _history.Rot(i + 1));
         angVel /= samples;
 
         if (angVel < MinAngVelDeg)
@@ -158,7 +172,7 @@ internal sealed class SaberMotionBlur : MonoBehaviour
         }
 
         float intensity = Mathf.Clamp01(
-            (angVel - MinAngVelDeg) / (FullAngVelDeg - MinAngVelDeg));
+        (angVel - MinAngVelDeg) / (FullAngVelDeg - MinAngVelDeg));
 
         UpdateSweep(intensity);
     }
@@ -170,10 +184,10 @@ internal sealed class SaberMotionBlur : MonoBehaviour
         _maxZ = bounds.maxZ;
 
         _profileRadius = MotionBlurBounds.BuildProfile(
-            _saberRenderers, _saberRoot, _minZ, _maxZ, StripRes);
+        _saberRenderers, _saberRoot, _minZ, _maxZ, StripRes);
 
         if (_saberRoot != null)
-            _rootInverse = _saberRoot.worldToLocalMatrix;
+        _rootInverse = _saberRoot.worldToLocalMatrix;
 
         _botLocal = new Vector3(0, 0, _minZ);
         _edgeExt = (_maxZ - _minZ) * EdgeExtFraction;
@@ -182,17 +196,21 @@ internal sealed class SaberMotionBlur : MonoBehaviour
     public void NotifyTransformChanged()
     {
         RecalculateBounds();
-        if (_hasCaptured)
-            _colorStrip = MotionBlurColorSampler.Sample(
-                _saberRenderers, _rootInverse, _minZ, _maxZ);
+
+        _colorDirty = true;
     }
 
-    public void RefreshColors()
-    {
-        _colorStrip = MotionBlurColorSampler.Sample(
-            _saberRenderers, _rootInverse, _minZ, _maxZ);
-        _hasCaptured = true;
-    }
+    public void RefreshColors() => _colorDirty = true;
+
+    public void ProcessSaber(LiveSaber saber) { }
+
+    public void OnColorChanged(Color color) => RefreshColors();
+
+    public void OnScaleChanged() => NotifyTransformChanged();
+
+    public void OnVisibilityLayerChanged(VisibilityLayer layer) => SetLayer((int)layer);
+
+    public void OnTeardown() => Destroy(this);
 
     private void UpdateSweep(float intensity)
     {
@@ -215,7 +233,7 @@ internal sealed class SaberMotionBlur : MonoBehaviour
 
             Vector3 tipWorld = m.MultiplyPoint3x4(new Vector3(0, 0, _maxZ));
             if (hasPrevTip && i > LeadingEdgeRamp && CheckCoherenceBreak(tipWorld, prevTipWorld, m))
-                break;
+            break;
             prevTipWorld = tipWorld;
             hasPrevTip = true;
 
@@ -223,13 +241,15 @@ internal sealed class SaberMotionBlur : MonoBehaviour
             AddSubdivisionVertices(m, maxAlpha, arcA, hasStrip, hasProfile);
 
             if (i < SweepSubdivisions - 1)
-                AddSubdivisionTriangles(i);
+            AddSubdivisionTriangles(i);
         }
 
         _sweepMesh.Clear();
         _sweepMesh.SetVertices(_sv);
         _sweepMesh.SetColors(_sc);
-        _sweepMesh.SetTriangles(_st, 0);
+        _sweepMesh.SetTriangles(_st, 0, calculateBounds: false);
+
+        _sweepMesh.bounds = HugeBounds;
     }
 
     private void ComputeArcParameters(float intensity, out float arcFrames)
@@ -240,8 +260,8 @@ internal sealed class SaberMotionBlur : MonoBehaviour
         Vector3 moveRecent = tipDir0 - tipDir1;
         Vector3 moveOlder = tipDir1 - tipDir2;
         float coherenceDot = (moveRecent.sqrMagnitude > SqrMagnitudeEpsilon && moveOlder.sqrMagnitude > SqrMagnitudeEpsilon)
-            ? Vector3.Dot(moveRecent.normalized, moveOlder.normalized)
-            : 1f;
+        ? Vector3.Dot(moveRecent.normalized, moveOlder.normalized)
+        : 1f;
 
         float accelFactor = Mathf.Max(Mathf.Clamp01((coherenceDot + 1f) * 0.5f), MinAccelFactor);
         arcFrames = Mathf.Min(intensity * accelFactor * (_history.Count - 1), MaxArcFrames);
@@ -260,12 +280,12 @@ internal sealed class SaberMotionBlur : MonoBehaviour
         Vector3 sweepDir = tipWorld - prevTipWorld;
         Vector3 centerWorld = m.MultiplyPoint3x4(new Vector3(0, 0, (_minZ + _maxZ) * 0.5f));
         Vector3 prevCenterWorld = _sv.Count >= RowsPerSubdiv
-            ? _sv[_sv.Count - RowsPerSubdiv + (RowsPerSubdiv / 2)]
-            : centerWorld;
+        ? _sv[_sv.Count - RowsPerSubdiv + (RowsPerSubdiv / 2)]
+        : centerWorld;
         Vector3 centerMove = centerWorld - prevCenterWorld;
 
         if (sweepDir.sqrMagnitude > SqrMagnitudeEpsilon && centerMove.sqrMagnitude > SqrMagnitudeEpsilon)
-            return Vector3.Dot(sweepDir.normalized, centerMove.normalized) < CoherenceDotBreakThreshold;
+        return Vector3.Dot(sweepDir.normalized, centerMove.normalized) < CoherenceDotBreakThreshold;
 
         return false;
     }
@@ -283,8 +303,8 @@ internal sealed class SaberMotionBlur : MonoBehaviour
     private (Vector3 localPos, float vertAlpha, Color vertColor) GetSubdivisionVertex(int j, bool hasStrip, bool hasProfile)
     {
         if (j == 0)
-            return (new Vector3(0, 0, _maxZ + _edgeExt), 0f,
-                hasStrip ? _colorStrip![StripRes - 1] : Color.black);
+        return (new Vector3(0, 0, _maxZ + _edgeExt), 0f,
+        hasStrip ? _colorStrip![StripRes - 1] : Color.black);
 
         if (j <= StripRes)
         {
@@ -292,19 +312,19 @@ internal sealed class SaberMotionBlur : MonoBehaviour
             float z = Mathf.Lerp(_minZ, _maxZ, (float)sliceIdx / (StripRes - 1));
             float r = hasProfile ? _profileRadius![sliceIdx] : DefaultProfileRadius;
             return (new Vector3(-r, 0, z), 1f,
-                hasStrip ? _colorStrip![sliceIdx] : Color.black);
+            hasStrip ? _colorStrip![sliceIdx] : Color.black);
         }
 
         if (j == StripRes + 1)
-            return (_botLocal, BottomVertexAlpha,
-                hasStrip ? _colorStrip![0] : Color.black);
+        return (_botLocal, BottomVertexAlpha,
+        hasStrip ? _colorStrip![0] : Color.black);
 
         {
             int sliceIdx = j - (StripRes + 2);
             float z = Mathf.Lerp(_minZ, _maxZ, (float)sliceIdx / (StripRes - 1));
             float r = hasProfile ? _profileRadius![sliceIdx] : DefaultProfileRadius;
             return (new Vector3(r, 0, z), 1f,
-                hasStrip ? _colorStrip![sliceIdx] : Color.black);
+            hasStrip ? _colorStrip![sliceIdx] : Color.black);
         }
     }
 

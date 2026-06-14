@@ -2,9 +2,9 @@
 // Licensed under the SaberSense Proprietary License. See LICENSE file in the project root.
 
 using Newtonsoft.Json.Linq;
-using SaberSense.Core;
+using SaberSense.App;
 using SaberSense.Core.Logging;
-using SaberSense.Services;
+using SaberSense.Persistence;
 using System.Collections.Generic;
 using System.IO;
 
@@ -34,9 +34,9 @@ internal sealed class InternalConfig
         {
             var obj = ConfigEnvelope.ReadFromDisk(_filePath);
             if (obj.TryGetValue(nameof(ActiveConfigName), out var nameToken))
-                ActiveConfigName = nameToken.Value<string>() ?? "default";
+            ActiveConfigName = nameToken.Value<string>() ?? "default";
             if (obj.TryGetValue(nameof(PinnedSabers), out var pinsToken) && pinsToken is JArray pinsArray)
-                PinnedSabers = pinsArray.ToObject<List<string>>() ?? new();
+            PinnedSabers = pinsArray.ToObject<List<string>>() ?? new();
         }
         catch (System.Exception ex)
         {

@@ -23,7 +23,7 @@ internal static class MotionBlurBounds
     private const float HiltExtensionFraction = 0.15f;
 
     public static (float minZ, float maxZ) Compute(
-        Renderer[] renderers, Transform root, (float minZ, float maxZ)? parsed)
+    Renderer[] renderers, Transform root, (float minZ, float maxZ)? parsed)
     {
         float minZ, maxZ;
 
@@ -52,7 +52,7 @@ internal static class MotionBlurBounds
     }
 
     public static float[] BuildProfile(
-        Renderer[] renderers, Transform root, float minZ, float maxZ, int resolution)
+    Renderer[] renderers, Transform root, float minZ, float maxZ, int resolution)
     {
         var profile = new float[resolution];
         float range = maxZ - minZ;
@@ -98,15 +98,15 @@ internal static class MotionBlurBounds
     internal static void ForEachAABBCorner(Vector3 bMin, Vector3 bMax, Matrix4x4 matrix, System.Action<Vector3> action)
     {
         for (int cx = 0; cx < 2; cx++)
-            for (int cy = 0; cy < 2; cy++)
-                for (int cz = 0; cz < 2; cz++)
-                {
-                    var corner = new Vector3(
-                        cx == 0 ? bMin.x : bMax.x,
-                        cy == 0 ? bMin.y : bMax.y,
-                        cz == 0 ? bMin.z : bMax.z);
-                    action(matrix.MultiplyPoint3x4(corner));
-                }
+        for (int cy = 0; cy < 2; cy++)
+        for (int cz = 0; cz < 2; cz++)
+        {
+            var corner = new Vector3(
+            cx == 0 ? bMin.x : bMax.x,
+            cy == 0 ? bMin.y : bMax.y,
+            cz == 0 ? bMin.z : bMax.z);
+            action(matrix.MultiplyPoint3x4(corner));
+        }
     }
 
     private static void ComputeFromMeshBounds(Renderer[] renderers, Transform root, out float minZ, out float maxZ)
@@ -160,7 +160,7 @@ internal static class MotionBlurBounds
             maxZ = perMax[mid];
 
             if (maxZ - minZ < MinBoundsRange)
-                maxZ = perMax[perMax.Count - 1];
+            maxZ = perMax[perMax.Count - 1];
         }
         else
         {
@@ -187,7 +187,7 @@ internal static class MotionBlurBounds
         }
 
         if (trailTipZ > float.MinValue && trailTipZ > minZ)
-            maxZ = trailTipZ + Mathf.Abs(trailTipZ - minZ) * TrailMarkerPadding;
+        maxZ = trailTipZ + Mathf.Abs(trailTipZ - minZ) * TrailMarkerPadding;
 
         return hasTrailTip;
     }

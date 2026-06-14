@@ -52,7 +52,7 @@ internal sealed class ProceduralMaterialFactory : System.IDisposable
         _softMaterial.color = Color.white;
 
         if (_softMaterial.HasProperty("_Mode"))
-            _softMaterial.SetFloat("_Mode", FadeMode);
+        _softMaterial.SetFloat("_Mode", FadeMode);
 
         return _softMaterial;
     }
@@ -65,7 +65,7 @@ internal sealed class ProceduralMaterialFactory : System.IDisposable
         _lineMaterial.color = Color.white;
 
         if (_lineMaterial.HasProperty("_Mode"))
-            _lineMaterial.SetFloat("_Mode", FadeMode);
+        _lineMaterial.SetFloat("_Mode", FadeMode);
 
         return _lineMaterial;
     }

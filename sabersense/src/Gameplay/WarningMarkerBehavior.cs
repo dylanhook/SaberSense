@@ -3,7 +3,6 @@
 
 using IPA.Utilities;
 using JetBrains.Annotations;
-using SaberSense.Core;
 using UnityEngine;
 using Zenject;
 
@@ -45,7 +44,7 @@ internal sealed class WarningMarkerBehavior : MonoBehaviour
         }
 
         if (_meshRenderer.sharedMaterial == null)
-            _meshRenderer.sharedMaterial = _sharedMaterial;
+        _meshRenderer.sharedMaterial = _sharedMaterial;
     }
 
     private void Update()
@@ -86,19 +85,19 @@ internal sealed class WarningMarkerBehavior : MonoBehaviour
     private static class Reflectors
     {
         public static readonly FieldAccessor<NoteController, NoteMovement>.Accessor NoteMovement
-            = FieldAccessor<NoteController, NoteMovement>.GetAccessor("_noteMovement");
+        = FieldAccessor<NoteController, NoteMovement>.GetAccessor("_noteMovement");
         public static readonly FieldAccessor<NoteMovement, NoteJump>.Accessor NoteJump
-            = FieldAccessor<NoteMovement, NoteJump>.GetAccessor("_jump");
+        = FieldAccessor<NoteMovement, NoteJump>.GetAccessor("_jump");
         public static readonly FieldAccessor<NoteJump, IVariableMovementDataProvider>.Accessor MovementProvider
-            = FieldAccessor<NoteJump, IVariableMovementDataProvider>.GetAccessor("_variableMovementDataProvider");
+        = FieldAccessor<NoteJump, IVariableMovementDataProvider>.GetAccessor("_variableMovementDataProvider");
         public static readonly FieldAccessor<NoteJump, Vector3>.Accessor StartOffset
-            = FieldAccessor<NoteJump, Vector3>.GetAccessor("_startOffset");
+        = FieldAccessor<NoteJump, Vector3>.GetAccessor("_startOffset");
         public static readonly FieldAccessor<NoteJump, Vector3>.Accessor EndOffset
-            = FieldAccessor<NoteJump, Vector3>.GetAccessor("_endOffset");
+        = FieldAccessor<NoteJump, Vector3>.GetAccessor("_endOffset");
         public static readonly FieldAccessor<NoteJump, float>.Accessor GravityBase
-            = FieldAccessor<NoteJump, float>.GetAccessor("_gravityBase");
+        = FieldAccessor<NoteJump, float>.GetAccessor("_gravityBase");
         public static readonly FieldAccessor<NoteJump, Quaternion>.Accessor EndRotation
-            = FieldAccessor<NoteJump, Quaternion>.GetAccessor("_endRotation");
+        = FieldAccessor<NoteJump, Quaternion>.GetAccessor("_endRotation");
     }
 
     [UsedImplicitly]
@@ -144,7 +143,7 @@ internal sealed class WarningMarkerBehavior : MonoBehaviour
             _viewVis.ApplyLayers(marker.gameObject, ViewFeature.WarningMarkers);
 
             if (marker._meshFilter != null)
-                marker._meshFilter.sharedMesh = _proceduralMesh;
+            marker._meshFilter.sharedMesh = _proceduralMesh;
         }
     }
 
@@ -154,18 +153,18 @@ internal sealed class WarningMarkerBehavior : MonoBehaviour
 
         Vector3[] vertices =
         [
-            new(-0.15f,  0.1f,  0f), new( 0.15f,  0.1f,  0f), new( 0.0f, -0.15f, 0f),
-            new(-0.25f,  0.4f,  0f), new( 0.25f,  0.4f,  0f), new( 0.0f,  0.2f,  0f),
-            new(-0.2f,  -0.25f, 0f), new( 0.2f,  -0.25f, 0f), new( 0.0f, -0.5f,  0f),
-            new(-0.45f,  0.15f, 0f), new(-0.35f,  0.1f,  0f), new(-0.15f,-0.3f,  0f), new(-0.25f,-0.25f, 0f),
-            new( 0.35f,  0.1f,  0f), new( 0.45f,  0.15f, 0f), new( 0.25f,-0.25f, 0f), new( 0.15f,-0.3f,  0f)
+        new(-0.15f,  0.1f,  0f), new( 0.15f,  0.1f,  0f), new( 0.0f, -0.15f, 0f),
+        new(-0.25f,  0.4f,  0f), new( 0.25f,  0.4f,  0f), new( 0.0f,  0.2f,  0f),
+        new(-0.2f,  -0.25f, 0f), new( 0.2f,  -0.25f, 0f), new( 0.0f, -0.5f,  0f),
+        new(-0.45f,  0.15f, 0f), new(-0.35f,  0.1f,  0f), new(-0.15f,-0.3f,  0f), new(-0.25f,-0.25f, 0f),
+        new( 0.35f,  0.1f,  0f), new( 0.45f,  0.15f, 0f), new( 0.25f,-0.25f, 0f), new( 0.15f,-0.3f,  0f)
         ];
 
         int[] triangles = [2, 1, 0, 5, 4, 3, 8, 7, 6, 11, 10, 9, 11, 9, 12, 16, 14, 13, 16, 15, 14];
 
         var uvs = new Vector2[vertices.Length];
         for (int i = 0; i < uvs.Length; i++)
-            uvs[i] = new Vector2((vertices[i].x + 0.45f) / 0.9f, (vertices[i].y + 0.5f) / 0.9f);
+        uvs[i] = new Vector2((vertices[i].x + 0.45f) / 0.9f, (vertices[i].y + 0.5f) / 0.9f);
 
         var doubleTris = new int[triangles.Length * 2];
         triangles.CopyTo(doubleTris, 0);

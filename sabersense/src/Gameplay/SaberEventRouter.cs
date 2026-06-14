@@ -14,7 +14,7 @@ internal sealed class SaberEventRouter : IDisposable
     [Inject] private readonly BeatmapObjectManager _noteTracker = null!;
     [Inject] private readonly GameEnergyCounter _hpCounter = null!;
     [InjectOptional] private readonly ObstacleSaberSparkleEffectManager? _wallSparks = null;
-    [Inject] private readonly ModSettings _cfg = null!;
+    [Inject] private readonly ModSettings _settings = null!;
     [Inject] private readonly IScoreController _scoring = null!;
     [Inject] private readonly IComboController _combo = null!;
     [Inject] private readonly RelativeScoreAndImmediateRankCounter _accuracy = null!;
@@ -38,14 +38,14 @@ internal sealed class SaberEventRouter : IDisposable
         _dispatcher = dispatcher;
         _trackedHand = hand;
 
-        if (!_cfg.EnableEventManager || _sceneData == null || !dispatcher.HasAnyCalls)
-            return;
+        if (!_settings.EnableEventManager || _sceneData == null || !dispatcher.HasAnyCalls)
+        return;
 
         IsBound = true;
 
         _finalNoteTimestamp = GetLastNoteTime();
         if (!_finalNoteTimestamp.HasValue)
-            _log?.Warn("Could not determine final note timestamp; level-end events may not fire");
+        _log?.Warn("Could not determine final note timestamp; level-end events may not fire");
 
         _noteTracker.noteWasCutEvent += HandleNoteCut;
         _noteTracker.noteWasMissedEvent += HandleNoteMissed;
@@ -63,7 +63,7 @@ internal sealed class SaberEventRouter : IDisposable
         _combo.comboDidChangeEvent += HandleComboChange;
 
         _lightColorCallback = _beatmapCallbacks.AddBeatmapCallback<LightColorBeatmapEventData>(
-            HandleLightColorEvent);
+        HandleLightColorEvent);
 
         _dispatcher.Fire(SaberEventType.OnLevelStart);
     }
@@ -88,7 +88,7 @@ internal sealed class SaberEventRouter : IDisposable
         _combo.comboDidChangeEvent -= HandleComboChange;
 
         if (_lightColorCallback is not null)
-            _beatmapCallbacks.RemoveBeatmapCallback(_lightColorCallback);
+        _beatmapCallbacks.RemoveBeatmapCallback(_lightColorCallback);
     }
 
     private void HandleLightColorEvent(LightColorBeatmapEventData data)
@@ -98,11 +98,11 @@ internal sealed class SaberEventRouter : IDisposable
         switch (data.colorType)
         {
             case EnvironmentColorType.Color0:
-                _dispatcher?.Fire(SaberEventType.OnBlueLightOn);
-                break;
+            _dispatcher?.Fire(SaberEventType.OnBlueLightOn);
+            break;
             case EnvironmentColorType.Color1:
-                _dispatcher?.Fire(SaberEventType.OnRedLightOn);
-                break;
+            _dispatcher?.Fire(SaberEventType.OnRedLightOn);
+            break;
         }
     }
 
@@ -123,20 +123,20 @@ internal sealed class SaberEventRouter : IDisposable
     private void HandleMultiplier(int mult, float progress)
     {
         if (mult > _prevMultiplier)
-            _dispatcher?.Fire(SaberEventType.MultiplierUp);
+        _dispatcher?.Fire(SaberEventType.MultiplierUp);
         _prevMultiplier = mult;
     }
 
     private void HandleWallContact(SaberType type)
     {
         if (type == _trackedHand)
-            _dispatcher?.Fire(SaberEventType.SaberStartColliding);
+        _dispatcher?.Fire(SaberEventType.SaberStartColliding);
     }
 
     private void HandleWallRelease(SaberType type)
     {
         if (type == _trackedHand)
-            _dispatcher?.Fire(SaberEventType.SaberStopColliding);
+        _dispatcher?.Fire(SaberEventType.SaberStopColliding);
     }
 
     private void HandleNoteCut(NoteController note, in NoteCutInfo info)
@@ -144,7 +144,7 @@ internal sealed class SaberEventRouter : IDisposable
         if (!_finalNoteTimestamp.HasValue) return;
 
         if (info.allIsOK && info.saberType == _trackedHand)
-            _dispatcher?.Fire(SaberEventType.OnSlice);
+        _dispatcher?.Fire(SaberEventType.OnSlice);
 
         CheckForLevelEnd(note.noteData.time);
     }
@@ -167,8 +167,8 @@ internal sealed class SaberEventRouter : IDisposable
         try
         {
             var lastNote = System.Linq.Enumerable.LastOrDefault(
-                _beatmap.GetBeatmapDataItems<NoteData>(0),
-                data => data.colorType != ColorType.None);
+            _beatmap.GetBeatmapDataItems<NoteData>(0),
+            data => data.colorType != ColorType.None);
             return lastNote?.time;
         }
         catch (System.Exception ex)

@@ -2,12 +2,10 @@
 // Licensed under the SaberSense Proprietary License. See LICENSE file in the project root.
 
 using IPA.Utilities;
+using SaberSense.Catalog.Model;
 using SaberSense.Configuration;
 using SaberSense.Core.Logging;
 using SaberSense.Core.Utilities;
-using SaberSense.Rendering;
-using SaberSense.Profiles;
-using SaberSense.Profiles.SaberAsset;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -36,11 +34,11 @@ internal abstract class TrailDriverBase
         TrailInstance = gameObject.AddComponent<SaberTrail>();
     }
 
-    protected void ResolveColorability(ModSettings config, Material? trailMaterial)
+    protected void ResolveColorability(TrailConfig config, Material? trailMaterial)
     {
         CanColorMaterial = trailMaterial != null
-            && !config.Trail.VertexColorOnly
-            && ShaderUtils.SupportsSaberColoring(trailMaterial);
+        && !config.VertexColorOnly
+        && ShaderUtils.SupportsSaberColoring(trailMaterial);
     }
 
     public void SetColor(Color color)
@@ -49,7 +47,7 @@ internal abstract class TrailDriverBase
 
         TrailInstance.Color = color;
         if (CanColorMaterial)
-            TrailInstance.SetMaterialBlock(ShaderUtils.ColorBlock(color));
+        TrailInstance.SetMaterialBlock(ShaderUtils.ColorBlock(color));
     }
 
     public void SetWhiteStep(float value)
@@ -76,7 +74,7 @@ internal sealed class SecondaryTrailDriver : TrailDriverBase
     private Material? _clonedMaterial;
 
     public SecondaryTrailDriver(GameObject gameObject, SaberTrailMarker marker, PlayerTransforms? playerTransforms)
-        : base(gameObject)
+    : base(gameObject)
     {
         _marker = marker;
         _playerTransforms = playerTransforms;
@@ -89,15 +87,15 @@ internal sealed class SecondaryTrailDriver : TrailDriverBase
         base.DestroyTrail();
     }
 
-    public void CreateTrail(ModSettings config, bool editor)
+    public void CreateTrail(TrailConfig config, bool editor)
     {
         if (_marker.PointStart == null
-            || _marker.PointEnd == null
-            || _marker.Length is < 1)
-            return;
+        || _marker.PointEnd == null
+        || _marker.Length is < 1)
+        return;
 
         var trailMat = _marker.TrailMaterial;
-        if (config.Trail.OverrideTrailSortOrder && trailMat != null)
+        if (config.OverrideTrailSortOrder && trailMat != null)
         {
             trailMat = new Material(trailMat);
             ApplyTrailSortOrder(trailMat);
@@ -105,26 +103,26 @@ internal sealed class SecondaryTrailDriver : TrailDriverBase
         }
 
         var setup = new TrailSetup(
-            Duration: _marker.Length,
-            WhiteFade: 0f,
-            Tint: Color.white,
-            Resolution: config.Trail.SplineResolution,
-            CaptureRate: config.Trail.CaptureSamplesPerSecond
+        Duration: _marker.Length,
+        WhiteFade: 0f,
+        Tint: Color.white,
+        Resolution: config.SplineResolution,
+        CaptureRate: config.CaptureSamplesPerSecond
         );
 
         TrailInstance!.Setup(
-            setup,
-            _marker.PointStart!,
-            _marker.PointEnd!,
-            trailMat,
-            editor);
+        setup,
+        _marker.PointStart!,
+        _marker.PointEnd!,
+        trailMat,
+        editor);
         TrailInstance.PlayerTransforms = _playerTransforms;
 
         ResolveColorability(config, trailMat);
     }
 }
 
-internal sealed class TrailSnapshot
+internal sealed class LiveTrail
 {
     public TrailSettings TrailSettings { get; }
     public Transform PointStart { get; }
@@ -142,7 +140,7 @@ internal sealed class TrailSnapshot
         {
             TrailSettings.TrailLength = value;
             foreach (var aux in AuxTrails)
-                aux.SyncLength(value);
+            aux.SyncLength(value);
         }
     }
 
@@ -199,39 +197,39 @@ internal sealed class TrailSnapshot
 
     public void Destroy() => UnityEngine.Object.Destroy(PointEnd.gameObject);
 
-    public static TrailSnapshot Create(
-        TrailSettings settings,
-        Transform pointStart,
-        Transform pointEnd,
-        bool isReversed,
-        List<SaberTrailMarker>? secondaryMarkers = null)
+    public static LiveTrail Create(
+    TrailSettings settings,
+    Transform pointStart,
+    Transform pointEnd,
+    bool isReversed,
+    List<SaberTrailMarker>? secondaryMarkers = null)
     {
         var endProxy = new GameObject("TrailEnd_Proxy").transform;
         endProxy.SetParent(pointEnd, false);
 
         var auxBindings = secondaryMarkers?
-            .Where(m => m != null)
-            .Select(m => new AuxTrailBinding(m, settings.OriginalDimensions.Length))
-            .ToList() ?? [];
+        .Where(m => m != null)
+        .Select(m => new AuxTrailBinding(m, settings.OriginalDimensions.Length))
+        .ToList() ?? [];
 
-        var snapshot = new TrailSnapshot(settings, pointStart, endProxy, isReversed, auxBindings);
+        var trail = new LiveTrail(settings, pointStart, endProxy, isReversed, auxBindings);
 
         foreach (var aux in auxBindings)
-            aux.SyncLength(settings.TrailLength);
+        aux.SyncLength(settings.TrailLength);
 
-        snapshot.ApplyTextureWrap(settings.TextureClamped);
-        snapshot.Width = settings.TrailWidth;
-        snapshot.PointEnd.localPosition = settings.PositionOffset;
+        trail.ApplyTextureWrap(settings.TextureClamped);
+        trail.Width = settings.TrailWidth;
+        trail.PointEnd.localPosition = settings.PositionOffset;
 
-        return snapshot;
+        return trail;
     }
 
-    private TrailSnapshot(
-        TrailSettings settings,
-        Transform start,
-        Transform end,
-        bool reversed,
-        List<AuxTrailBinding> auxTrails)
+    private LiveTrail(
+    TrailSettings settings,
+    Transform start,
+    Transform end,
+    bool reversed,
+    List<AuxTrailBinding> auxTrails)
     {
         TrailSettings = settings;
         PointStart = start;
@@ -249,8 +247,8 @@ internal sealed class TrailSnapshot
         if (!TrailSettings.Material.Material!.TryGetMainTexture(out var tex)) return;
 
         tex.wrapMode = clamp
-            ? TextureWrapMode.Clamp
-            : TrailSettings.NativeTextureWrap.GetValueOrDefault();
+        ? TextureWrapMode.Clamp
+        : TrailSettings.NativeTextureWrap.GetValueOrDefault();
     }
 
     public void RevertMaterialForSaberAsset(SaberAssetDefinition saber)
@@ -277,46 +275,44 @@ internal sealed class TrailSnapshot
         }
 
         public void SyncLength(int mainLength)
-            => Trail.Length = Mathf.Max(0, mainLength - _offsetFromMain);
+        => Trail.Length = Mathf.Max(0, mainLength - _offsetFromMain);
     }
 }
 
 internal interface ITrailDriver
 {
-    public void CreateTrail(ModSettings config, bool editor);
+    public void CreateTrail(TrailConfig config, bool editor);
     public void DestroyTrail(bool immediate = false);
-    public void SetTrailData(TrailSnapshot instanceTrailData);
+    public void SetLiveTrail(LiveTrail liveTrail);
     public void SetColor(Color color);
     public void SetWhiteStep(float value);
     public void SetVisibilityLayer(CameraUtils.Core.VisibilityLayer layer);
+
+    public void DisposeOwnedMaterialIfOrphaned(MaterialHandle? currentCustomizationMaterial);
 }
 
 internal sealed class PrimaryTrailDriver : TrailDriverBase, ITrailDriver
 {
-    private TrailSnapshot? _trailSnapshot;
+    private LiveTrail? _liveTrail;
     private readonly global::SaberTrail? _fallbackTrail;
     private readonly PlayerTransforms? _playerTransforms;
     private Material? _fallbackMaterial;
 
-    private int? _savedRenderQueue;
-    private int? _savedZWrite;
-    private int? _savedZTest;
-
     public PrimaryTrailDriver(GameObject gameObject, PlayerTransforms? playerTransforms)
-        : base(gameObject)
+    : base(gameObject)
     {
         _playerTransforms = playerTransforms;
     }
 
     public PrimaryTrailDriver(GameObject gameObject, global::SaberTrail backupTrail, PlayerTransforms? playerTransforms)
-        : this(gameObject, playerTransforms)
+    : this(gameObject, playerTransforms)
     {
         _fallbackTrail = backupTrail;
     }
 
-    public void CreateTrail(ModSettings config, bool editor)
+    public void CreateTrail(TrailConfig config, bool editor)
     {
-        if (_trailSnapshot is null)
+        if (_liveTrail is null)
         {
             if (_fallbackTrail == null)
             {
@@ -329,90 +325,69 @@ internal sealed class PrimaryTrailDriver : TrailDriverBase, ITrailDriver
             var trailRenderer = _fallbackTrail.GetField<SaberTrailRenderer, global::SaberTrail>("_trailRenderer");
             _fallbackMaterial = trailRenderer.GetField<MeshRenderer, SaberTrailRenderer>("_meshRenderer").material;
 
-            if (config.Trail.OverrideTrailSortOrder && _fallbackMaterial != null)
-                ApplyTrailSortOrder(_fallbackMaterial);
+            if (config.OverrideTrailSortOrder && _fallbackMaterial != null)
+            ApplyTrailSortOrder(_fallbackMaterial);
 
             var vanillaSetup = new TrailSetup(
-                Duration: 14,
-                WhiteFade: 0f,
-                Tint: Color.white,
-                Resolution: config.Trail.SplineResolution,
-                CaptureRate: 0
+            Duration: 14,
+            WhiteFade: 0f,
+            Tint: Color.white,
+            Resolution: config.SplineResolution,
+            CaptureRate: 0
             );
             TrailInstance!.Setup(vanillaSetup, trailStart.transform, trailEnd.transform, _fallbackMaterial, editor);
             TrailInstance!.PlayerTransforms = _playerTransforms;
-            TrailInstance!.LocalSpaceTrails = config.Trail.LocalSpaceTrails;
+            TrailInstance!.LocalSpaceTrails = config.LocalSpaceTrails;
             return;
         }
 
-        if (_trailSnapshot.Length is < 1)
+        if (_liveTrail.Length is < 1)
         {
             return;
         }
 
-        if (!_trailSnapshot!.Material!.IsValid)
+        if (!_liveTrail!.Material!.IsValid)
         {
             ModLogger.ForSource("TrailDriver").Warn("Skipping trail creation - trail material is no longer valid.");
             return;
         }
 
-        ApplySortOrderOverrides(_trailSnapshot.Material.Material, config.Trail.OverrideTrailSortOrder);
+        if (config.OverrideTrailSortOrder)
+        _liveTrail.Material.ApplySortOrder();
+        else
+        _liveTrail.Material.RevertSortOrder();
 
         var trailSetup = new TrailSetup(
-            Duration: _trailSnapshot.Length,
-            WhiteFade: _trailSnapshot.WhiteStep,
-            Tint: Color.white,
-            Resolution: config.Trail.SplineResolution,
-            CaptureRate: config.Trail.CaptureSamplesPerSecond
+        Duration: _liveTrail.Length,
+        WhiteFade: _liveTrail.WhiteStep,
+        Tint: Color.white,
+        Resolution: config.SplineResolution,
+        CaptureRate: config.CaptureSamplesPerSecond
         );
-        var (pointStart, pointEnd) = _trailSnapshot.GetPoints();
+        var (pointStart, pointEnd) = _liveTrail.GetPoints();
         if (pointStart == null || pointEnd == null)
         {
             return;
         }
 
         TrailInstance!.Setup(
-            trailSetup,
-            pointStart,
-            pointEnd,
-            _trailSnapshot.Material.Material!,
-            editor
+        trailSetup,
+        pointStart,
+        pointEnd,
+        _liveTrail.Material.Material!,
+        editor
         );
         TrailInstance!.PlayerTransforms = _playerTransforms;
-        TrailInstance!.LocalSpaceTrails = config.Trail.LocalSpaceTrails;
-        ResolveColorability(config, _trailSnapshot.Material.Material);
-    }
-
-    private void ApplySortOrderOverrides(Material? mat, bool enable)
-    {
-        if (mat == null) return;
-
-        if (enable)
-        {
-            _savedRenderQueue ??= mat.renderQueue;
-            if (mat.HasProperty(ShaderUtils.ZWriteId)) _savedZWrite ??= mat.GetInt(ShaderUtils.ZWriteId);
-            if (mat.HasProperty(ShaderUtils.ZTestId)) _savedZTest ??= mat.GetInt(ShaderUtils.ZTestId);
-
-            ApplyTrailSortOrder(mat);
-        }
-        else if (_savedRenderQueue.HasValue)
-        {
-            mat.renderQueue = _savedRenderQueue.Value;
-            if (_savedZWrite.HasValue && mat.HasProperty(ShaderUtils.ZWriteId)) mat.SetInt(ShaderUtils.ZWriteId, _savedZWrite.Value);
-            if (_savedZTest.HasValue && mat.HasProperty(ShaderUtils.ZTestId)) mat.SetInt(ShaderUtils.ZTestId, _savedZTest.Value);
-
-            _savedRenderQueue = null;
-            _savedZWrite = null;
-            _savedZTest = null;
-        }
+        TrailInstance!.LocalSpaceTrails = config.LocalSpaceTrails;
+        ResolveColorability(config, _liveTrail.Material.Material);
     }
 
     public void DestroyTrail(bool immediate = false)
     {
         if (immediate)
-            TrailInstance?.TryDestroyImmediate();
+        TrailInstance?.TryDestroyImmediate();
         else
-            TrailInstance?.TryDestroy();
+        TrailInstance?.TryDestroy();
 
         TrailInstance = null;
 
@@ -425,5 +400,12 @@ internal sealed class PrimaryTrailDriver : TrailDriverBase, ITrailDriver
 
     public override void DestroyTrail() => DestroyTrail(false);
 
-    public void SetTrailData(TrailSnapshot instanceTrailData) => _trailSnapshot = instanceTrailData;
+    public void SetLiveTrail(LiveTrail liveTrail) => _liveTrail = liveTrail;
+
+    public void DisposeOwnedMaterialIfOrphaned(MaterialHandle? currentCustomizationMaterial)
+    {
+        var mine = _liveTrail?.Material;
+        if (mine is not null && !ReferenceEquals(mine, currentCustomizationMaterial))
+        mine.Dispose();
+    }
 }

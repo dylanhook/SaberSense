@@ -69,7 +69,7 @@ Pin favorites, navigate folders, search by name, sort by name/date/size/author. 
 ## Installation
 
 > [!IMPORTANT]
-> You need [BSIPA](https://github.com/bsmg/BeatSaber-IPA-Reloaded) (4.3.0+), [SiraUtil](https://github.com/Auros/SiraUtil) (3.1.7+), [BeatSaberMarkupLanguage](https://github.com/monkeymanboy/BeatSaberMarkupLanguage) (1.11.0+), [AssetBundleLoadingTools](https://github.com/nicoco007/AssetBundleLoadingTools) (1.1.10+), and [CameraUtils](https://github.com/Kylemc1413/CameraUtils) (1.0.0+) installed.
+> You need [BSIPA](https://github.com/bsmg/BeatSaber-IPA-Reloaded) (4.3.0+), [SiraUtil](https://github.com/Auros/SiraUtil) (3.1.7+), [BeatSaberMarkupLanguage](https://github.com/monkeymanboy/BeatSaberMarkupLanguage) (1.11.0+), [AssetBundleLoadingTools](https://github.com/nicoco007/AssetBundleLoadingTools) (1.1.10+), and [CameraUtils](https://github.com/Reezonate/CameraUtils) (1.0.0+) installed.
 
 Place `SaberSense.dll` in your `Plugins` folder. Saber files go in `CustomSabers/`.
 

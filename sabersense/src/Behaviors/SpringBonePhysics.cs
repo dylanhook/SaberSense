@@ -94,8 +94,8 @@ internal sealed class SpringBonePhysics : MonoBehaviour
         if (parentIndex >= 0)
         {
             var parentWorldPos = _nodes[parentIndex].Bone != null
-                ? _nodes[parentIndex].Bone!.position
-                : node.WorldPos;
+            ? _nodes[parentIndex].Bone!.position
+            : node.WorldPos;
             depth += Vector3.Distance(parentWorldPos, node.WorldPos);
             node.DepthAlongChain = depth;
             _chainSpan = Mathf.Max(_chainSpan, depth);
@@ -110,11 +110,11 @@ internal sealed class SpringBonePhysics : MonoBehaviour
         {
             var child = bone.GetChild(i);
             if (!ShouldExclude(child))
-                BuildHierarchy(child, selfIndex, depth);
+            BuildHierarchy(child, selfIndex, depth);
         }
 
         if (bone.childCount == 0 && (TailLength > 0f || TailOffset != Vector3.zero))
-            BuildHierarchy(null, selfIndex, depth);
+        BuildHierarchy(null, selfIndex, depth);
     }
 
     private Vector3 ComputeTailOffset(Transform leafBone)
@@ -125,20 +125,20 @@ internal sealed class SpringBonePhysics : MonoBehaviour
             if (grandParent != null)
             {
                 return leafBone.InverseTransformPoint(
-                    leafBone.position * 2f - grandParent.position) * TailLength;
+                leafBone.position * 2f - grandParent.position) * TailLength;
             }
             return new Vector3(TailLength, 0f, 0f);
         }
 
         return leafBone.InverseTransformPoint(
-            transform.TransformDirection(TailOffset) + leafBone.position);
+        transform.TransformDirection(TailOffset) + leafBone.position);
     }
 
     private bool ShouldExclude(Transform t)
     {
         if (Exclusions == null) return false;
         for (int i = 0; i < Exclusions.Count; i++)
-            if (Exclusions[i] == t) return true;
+        if (Exclusions[i] == t) return true;
         return false;
     }
 
@@ -221,13 +221,13 @@ internal sealed class SpringBonePhysics : MonoBehaviour
         refMatrix.SetColumn(3, (Vector4)parent.WorldPos);
 
         var localOffset = node.Bone != null
-            ? node.Bone.localPosition
-            : node.TailOffset;
+        ? node.Bone.localPosition
+        : node.TailOffset;
 
         var idealPos = refMatrix.MultiplyPoint3x4(localOffset);
 
         if (SpringForce > 0f)
-            node.WorldPos += (idealPos - node.WorldPos) * SpringForce;
+        node.WorldPos += (idealPos - node.WorldPos) * SpringForce;
 
         if (Rigidity > 0f)
         {
@@ -235,7 +235,7 @@ internal sealed class SpringBonePhysics : MonoBehaviour
             float gapMag = gap.magnitude;
             float maxGap = segmentLength * (1f - Rigidity) * 2f;
             if (gapMag > maxGap)
-                node.WorldPos += gap * ((gapMag - maxGap) / gapMag);
+            node.WorldPos += gap * ((gapMag - maxGap) / gapMag);
         }
     }
 
@@ -246,7 +246,7 @@ internal sealed class SpringBonePhysics : MonoBehaviour
         for (int c = 0; c < Colliders.Count; c++)
         {
             if (Colliders[c] != null && Colliders[c].enabled)
-                Colliders[c].ResolveParticle(ref node.WorldPos, radius);
+            Colliders[c].ResolveParticle(ref node.WorldPos, radius);
         }
     }
 
@@ -274,7 +274,7 @@ internal sealed class SpringBonePhysics : MonoBehaviour
         var separation = parent.WorldPos - node.WorldPos;
         float currentDist = separation.magnitude;
         if (currentDist > 0f)
-            node.WorldPos += separation * ((currentDist - segmentLength) / currentDist);
+        node.WorldPos += separation * ((currentDist - segmentLength) / currentDist);
     }
 
     private void CommitToTransforms()
@@ -287,25 +287,25 @@ internal sealed class SpringBonePhysics : MonoBehaviour
             if (parent.Bone!.childCount <= 1)
             {
                 var bindDir = node.Bone != null
-                    ? node.Bone.localPosition
-                    : node.TailOffset;
+                ? node.Bone.localPosition
+                : node.TailOffset;
 
                 var fromDir = parent.Bone!.TransformDirection(bindDir);
                 var toDir = node.WorldPos - parent.WorldPos;
 
                 if (fromDir.sqrMagnitude > 0f && toDir.sqrMagnitude > 0f)
-                    parent.Bone.rotation = Quaternion.FromToRotation(fromDir, toDir) * parent.Bone.rotation;
+                parent.Bone.rotation = Quaternion.FromToRotation(fromDir, toDir) * parent.Bone.rotation;
             }
 
             if (node.Bone != null)
-                node.Bone.position = node.WorldPos;
+            node.Bone.position = node.WorldPos;
         }
     }
 
     private static float MeasureSegmentLength(Node node, Node parent)
     {
         if (node.Bone != null)
-            return Vector3.Distance(parent.Bone!.position, node.Bone!.position);
+        return Vector3.Distance(parent.Bone!.position, node.Bone!.position);
 
         return parent.Bone!.localToWorldMatrix.MultiplyVector(node.TailOffset).magnitude;
     }

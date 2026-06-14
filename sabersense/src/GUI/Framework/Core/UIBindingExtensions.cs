@@ -1,7 +1,7 @@
 // Copyright (c) 2026 dylanhook. All rights reserved.
 // Licensed under the SaberSense Proprietary License. See LICENSE file in the project root.
 
-using SaberSense.Configuration;
+using SaberSense.Input;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -14,9 +14,9 @@ namespace SaberSense.GUI.Framework.Core;
 internal static class UIBindingExtensions
 {
     public static UIToggle Bind<TSource>(this UIToggle toggle, TSource config,
-        Expression<Func<TSource, bool>> property,
-        Action<bool>? onChanged = null, BindingScope? scope = null)
-        where TSource : BindableSettings
+    Expression<Func<TSource, bool>> property,
+    BindingScope scope, Action<bool>? onChanged = null)
+    where TSource : BindableSettings
     {
         var accessor = PropertyAccessor.FromExpression(config, property);
         if (accessor is null) return toggle;
@@ -28,25 +28,16 @@ internal static class UIBindingExtensions
             onChanged?.Invoke(val);
         });
 
-        PropertyChangedEventHandler handler = (_, e) =>
-        {
-            if (string.IsNullOrEmpty(e.PropertyName) ||
-                accessor.PropertyPath == e.PropertyName ||
-                accessor.PropertyPath.StartsWith(e.PropertyName + "."))
-            {
-                var val = (bool)accessor.GetValue()!;
-                toggle.SetValue(val);
-            }
-        };
-        RegisterHandler(config, handler, scope);
+        RegisterRefresh(config, accessor.PropertyPath,
+        () => toggle.SetValue((bool)accessor.GetValue()!), scope);
 
         return toggle;
     }
 
     public static UISlider Bind<TSource>(this UISlider slider, TSource config,
-        Expression<Func<TSource, float>> property,
-        Action<float>? onChanged = null, BindingScope? scope = null)
-        where TSource : BindableSettings
+    Expression<Func<TSource, float>> property,
+    BindingScope scope, Action<float>? onChanged = null)
+    where TSource : BindableSettings
     {
         var accessor = PropertyAccessor.FromExpression(config, property);
         if (accessor is null) return slider;
@@ -58,25 +49,16 @@ internal static class UIBindingExtensions
             onChanged?.Invoke(val);
         });
 
-        PropertyChangedEventHandler handler = (_, e) =>
-        {
-            if (string.IsNullOrEmpty(e.PropertyName) ||
-                accessor.PropertyPath == e.PropertyName ||
-                accessor.PropertyPath.StartsWith(e.PropertyName + "."))
-            {
-                var val = (float)accessor.GetValue()!;
-                slider.SetValue(val);
-            }
-        };
-        RegisterHandler(config, handler, scope);
+        RegisterRefresh(config, accessor.PropertyPath,
+        () => slider.SetValue((float)accessor.GetValue()!), scope);
 
         return slider;
     }
 
     public static UISlider BindInt<TSource>(this UISlider slider, TSource config,
-        Expression<Func<TSource, int>> property,
-        Action<int>? onChanged = null, BindingScope? scope = null)
-        where TSource : BindableSettings
+    Expression<Func<TSource, int>> property,
+    BindingScope scope, Action<int>? onChanged = null)
+    where TSource : BindableSettings
     {
         var accessor = PropertyAccessor.FromExpression(config, property);
         if (accessor is null) return slider;
@@ -88,25 +70,16 @@ internal static class UIBindingExtensions
             onChanged?.Invoke(Mathf.RoundToInt(val));
         });
 
-        PropertyChangedEventHandler handler = (_, e) =>
-        {
-            if (string.IsNullOrEmpty(e.PropertyName) ||
-                accessor.PropertyPath == e.PropertyName ||
-                accessor.PropertyPath.StartsWith(e.PropertyName + "."))
-            {
-                var val = (int)accessor.GetValue()!;
-                slider.SetValue(val);
-            }
-        };
-        RegisterHandler(config, handler, scope);
+        RegisterRefresh(config, accessor.PropertyPath,
+        () => slider.SetValue((int)accessor.GetValue()!), scope);
 
         return slider;
     }
 
     public static UIMultiComboBox BindList<TSource>(this UIMultiComboBox combo, TSource config,
-        Expression<Func<TSource, List<int>>> property,
-        Action<HashSet<int>>? onChanged = null, BindingScope? scope = null)
-        where TSource : BindableSettings
+    Expression<Func<TSource, List<int>>> property,
+    BindingScope scope, Action<HashSet<int>>? onChanged = null)
+    where TSource : BindableSettings
     {
         var accessor = PropertyAccessor.FromExpression(config, property);
         if (accessor is null) return combo;
@@ -124,25 +97,16 @@ internal static class UIBindingExtensions
             onChanged?.Invoke(val);
         });
 
-        PropertyChangedEventHandler handler = (_, e) =>
-        {
-            if (string.IsNullOrEmpty(e.PropertyName) ||
-                accessor.PropertyPath == e.PropertyName ||
-                accessor.PropertyPath.StartsWith(e.PropertyName + "."))
-            {
-                var list = accessor.GetValue() as List<int>;
-                combo.SetSelected(list ?? []);
-            }
-        };
-        RegisterHandler(config, handler, scope);
+        RegisterRefresh(config, accessor.PropertyPath,
+        () => combo.SetSelected(accessor.GetValue() as List<int> ?? []), scope);
 
         return combo;
     }
 
     public static UIComboBox BindInt<TSource>(this UIComboBox combo, TSource config,
-        Expression<Func<TSource, int>> property,
-        Action<int>? onChanged = null, BindingScope? scope = null)
-        where TSource : BindableSettings
+    Expression<Func<TSource, int>> property,
+    BindingScope scope, Action<int>? onChanged = null)
+    where TSource : BindableSettings
     {
         var accessor = PropertyAccessor.FromExpression(config, property);
         if (accessor is null) return combo;
@@ -154,65 +118,48 @@ internal static class UIBindingExtensions
             onChanged?.Invoke(idx);
         });
 
-        PropertyChangedEventHandler handler = (_, e) =>
-        {
-            if (string.IsNullOrEmpty(e.PropertyName) ||
-                accessor.PropertyPath == e.PropertyName ||
-                accessor.PropertyPath.StartsWith(e.PropertyName + "."))
-            {
-                var val = (int)accessor.GetValue()!;
-                combo.SetSelected(val);
-            }
-        };
-        RegisterHandler(config, handler, scope);
+        RegisterRefresh(config, accessor.PropertyPath,
+        () => combo.SetSelected((int)accessor.GetValue()!), scope);
 
         return combo;
     }
 
     public static UIKeybindButton BindInt<TSource>(this UIKeybindButton keybind, TSource config,
-        Expression<Func<TSource, int>> property,
-        Action<int>? onChanged = null, BindingScope? scope = null)
-        where TSource : BindableSettings
+    Expression<Func<TSource, VrButtonBinding>> property,
+    BindingScope scope, Action<int>? onChanged = null)
+    where TSource : BindableSettings
     {
         var accessor = PropertyAccessor.FromExpression(config, property);
         if (accessor is null) return keybind;
 
-        keybind.SetValue((int)accessor.GetValue()!);
+        keybind.SetValue((int)(VrButtonBinding)accessor.GetValue()!);
         keybind.OnValueChanged(val =>
         {
-            accessor.SetValue(val);
+            accessor.SetValue((VrButtonBinding)val);
             onChanged?.Invoke(val);
         });
 
-        PropertyChangedEventHandler handler = (_, e) =>
-        {
-            if (string.IsNullOrEmpty(e.PropertyName) ||
-                accessor.PropertyPath == e.PropertyName ||
-                accessor.PropertyPath.StartsWith(e.PropertyName + "."))
-            {
-                var val = (int)accessor.GetValue()!;
-                keybind.SetValue(val);
-            }
-        };
-        RegisterHandler(config, handler, scope);
+        RegisterRefresh(config, accessor.PropertyPath,
+        () => keybind.SetValue((int)(VrButtonBinding)accessor.GetValue()!), scope);
 
         return keybind;
     }
 
-    public static UIColorPicker BindColor(this UIColorPicker picker,
-        ModSettings config,
-        Func<Color> getter,
-        Action<Color> setter,
-        string ownerPropertyPath,
-        Action<Color>? onLiveChange = null,
-        BindingScope? scope = null)
+    public static UIColorPicker BindColor<TSource>(this UIColorPicker picker,
+    TSource config,
+    Func<Color> getter,
+    Action<Color> setter,
+    string ownerPropertyPath,
+    BindingScope scope,
+    Action<Color>? onLiveChange = null)
+    where TSource : BindableSettings
     {
         if (config is null || picker is null) return picker!;
 
         picker.SetColor(getter());
 
         if (onLiveChange is not null)
-            picker.OnColorChanged(onLiveChange);
+        picker.OnColorChanged(onLiveChange);
 
         picker.OnCommit(c =>
         {
@@ -220,28 +167,25 @@ internal static class UIBindingExtensions
             config.RaisePropertyChanged(ownerPropertyPath);
         });
 
-        PropertyChangedEventHandler handler = (_, e) =>
-        {
-            if (string.IsNullOrEmpty(e.PropertyName) ||
-                e.PropertyName == ownerPropertyPath ||
-                ownerPropertyPath.StartsWith(e.PropertyName + "."))
-            {
-                picker.SetColor(getter());
-            }
-        };
-        RegisterHandler(config, handler, scope);
+        RegisterRefresh(config, ownerPropertyPath,
+        () => picker.SetColor(getter()), scope);
 
         return picker;
     }
 
-    private static void RegisterHandler(INotifyPropertyChanged config,
-        PropertyChangedEventHandler handler, BindingScope? scope)
+    internal static bool PathMatches(string bindingPath, string? raisedName) =>
+    string.IsNullOrEmpty(raisedName) ||
+    bindingPath == raisedName ||
+    bindingPath.StartsWith(raisedName + ".");
+
+    private static void RegisterRefresh(INotifyPropertyChanged config,
+    string bindingPath, Action refresh, BindingScope scope)
     {
-        if (scope is null)
-            throw new ArgumentNullException(nameof(scope),
-                "BindingScope is required to prevent event-lifetime leaks. " +
-                "Pass the owning view's _bindingScope.");
-        scope.Add(config, handler);
+        scope.Add(config, (_, e) =>
+        {
+            if (PathMatches(bindingPath, e.PropertyName))
+            refresh();
+        });
     }
 }
 
@@ -272,7 +216,7 @@ internal sealed class PropertyAccessor
         LeafProperty?.SetValue(target, value);
 
         if (_rootConfig is not null && !ReferenceEquals(target, _rootConfig))
-            _rootConfig.RaisePropertyChanged(PropertyPath);
+        _rootConfig.RaisePropertyChanged(PropertyPath);
     }
 
     private object ResolveTarget()
@@ -310,7 +254,7 @@ internal sealed class PropertyAccessor
 
         var leafMember = chain[chain.Count - 1];
         if (leafMember is PropertyInfo)
-            return new PropertyAccessor(root!, chain, (root as BindableSettings)!, pathParts.ToString());
+        return new PropertyAccessor(root!, chain, (root as BindableSettings)!, pathParts.ToString());
 
         return null;
     }

@@ -22,7 +22,7 @@ internal sealed class ScopedLogger : IModLogger
     public void Error(string message) => _root.Log(LogLevel.Error, _source, message);
 
     public void Error(Exception exception) =>
-        _root.Log(LogLevel.Error, _source, exception?.ToString() ?? "(null exception)");
+    _root.Log(LogLevel.Error, _source, exception?.ToString() ?? "(null exception)");
 
     public IModLogger ForSource(string source) => new ScopedLogger(_root, source);
 }

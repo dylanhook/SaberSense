@@ -51,7 +51,7 @@ public class UISlider : UIElement
         le.preferredHeight = TrackHeight;
 
         _trackBg = new UIImage("Track")
-            .SetColor(UITheme.Border);
+        .SetColor(UITheme.Border);
         _trackBg.RectTransform.SetParent(RectTransform, false);
         _trackBg.SetAnchors(Vector2.zero, Vector2.one);
         _trackBg.ImageComponent.raycastTarget = true;
@@ -92,8 +92,8 @@ public class UISlider : UIElement
         labelRect.pivot = new Vector2(0.5f, 0.5f);
 
         _valueLabel = new UILabel("Val", "0.0")
-            .SetFontSize(UITheme.FontSmall)
-            .SetColor(UITheme.TextLabel);
+        .SetFontSize(UITheme.FontSmall)
+        .SetColor(UITheme.TextLabel);
         _valueLabel.TextComponent.fontStyle = TMPro.FontStyles.Bold;
         _valueLabel.RectTransform.SetParent(labelRect, false);
         _valueLabel.TextComponent.raycastTarget = false;
@@ -173,7 +173,7 @@ public class UISlider : UIElement
         _value = Mathf.Clamp(val, _min, _max);
         _lastValidValue = _value;
         if (_unitySlider)
-            _unitySlider.SetValueWithoutNotify(_value);
+        _unitySlider.SetValueWithoutNotify(_value);
         UpdateFill();
         UpdateLabel();
         return this;
@@ -222,8 +222,8 @@ public class UISlider : UIElement
         else
         {
             vStr = (Mathf.Abs(_max - _min) <= 10f && Mathf.Abs(_value - Mathf.Round(_value)) > 0.001f)
-                ? _value.ToString("F2")
-                : Mathf.RoundToInt(_value).ToString();
+            ? _value.ToString("F2")
+            : Mathf.RoundToInt(_value).ToString();
 
             if (_min == PercentMin && _max == PercentMax)
             {
@@ -260,8 +260,8 @@ public class UISlider : UIElement
         {
             if (_clipRect == null) return false;
             var cam = eventData.pointerCurrentRaycast.module != null
-                ? eventData.pointerCurrentRaycast.module.eventCamera
-                : eventData.pressEventCamera;
+            ? eventData.pointerCurrentRaycast.module.eventCamera
+            : eventData.pressEventCamera;
             return !RectTransformUtility.RectangleContainsScreenPoint(_clipRect, eventData.position, cam);
         }
 
@@ -286,7 +286,7 @@ public class UISlider : UIElement
             if (_owner is not null) _owner._isDragging = false;
             base.OnPointerUp(eventData);
             if (_owner?._onCommit is not null)
-                UICallbackGuard.Invoke(_owner._onCommit, _owner._value);
+            UICallbackGuard.Invoke(_owner._onCommit, _owner._value);
         }
     }
 

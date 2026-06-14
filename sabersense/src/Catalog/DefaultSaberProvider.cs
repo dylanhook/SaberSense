@@ -1,13 +1,13 @@
 // Copyright (c) 2026 dylanhook. All rights reserved.
 // Licensed under the SaberSense Proprietary License. See LICENSE file in the project root.
 
-using SaberSense.Catalog.Data;
+using SaberSense.AssetPipeline;
+using SaberSense.AssetPipeline.Formats.Saber;
+using SaberSense.Catalog.Model;
 using SaberSense.Configuration;
 using SaberSense.Core;
 using SaberSense.Core.Logging;
 using SaberSense.Gameplay;
-using SaberSense.Profiles;
-using SaberSense.Profiles.SaberAsset;
 using SaberSense.Rendering;
 using System;
 using System.Linq;
@@ -19,11 +19,11 @@ using Object = UnityEngine.Object;
 namespace SaberSense.Catalog;
 
 internal sealed class DefaultSaberProvider(
-    ModSettings config,
-    SaberAssetDefinition.Factory defFactory,
-    SaberCatalog catalog,
-    PinTracker pins,
-    IModLogger log) : IInitializable, IDisposable, IDefaultSaberProvider
+ModSettings settings,
+SaberAssetDefinition.Factory defFactory,
+SaberCatalog catalog,
+PinTracker pins,
+IModLogger log) : IInitializable, IDisposable, IDefaultSaberProvider
 {
     private const string SaberModelAddress = "Assets/Prefabs/Sabers/BasicSaberModel.prefab";
     private const int DefaultTrailLength = 20;
@@ -35,7 +35,7 @@ internal sealed class DefaultSaberProvider(
     public GameObject? DefaultSaberPrefab { get; private set; }
     public GameObject? VanillaSaberPrefab { get; private set; }
 
-    private readonly ModSettings _config = config;
+    private readonly ModSettings _settings = settings;
     private readonly SaberAssetDefinition.Factory _defFactory = defFactory;
     private readonly SaberCatalog _catalog = catalog;
     private readonly PinTracker _pins = pins;
@@ -59,8 +59,8 @@ internal sealed class DefaultSaberProvider(
 
             _catalog.RegisterDefaultSaberEntry(Entry!);
 
-            if (_config.ShowDefaultSaber)
-                _catalog.ShowDefaultSaberPreview(Preview!);
+            if (_settings.ShowDefaultSaber)
+            _catalog.ShowDefaultSaberPreview(Preview!);
         }
         catch (Exception ex)
         {
@@ -114,7 +114,7 @@ internal sealed class DefaultSaberProvider(
             {
                 var meshRenderer = trailRendererPrefab.GetComponent<MeshRenderer>();
                 if (meshRenderer != null)
-                    trailMaterial = meshRenderer.sharedMaterial;
+                trailMaterial = meshRenderer.sharedMaterial;
             }
         }
 
@@ -147,9 +147,9 @@ internal sealed class DefaultSaberProvider(
         descriptor.AuthorName = "Beat Games";
 
         foreach (var glow in child.GetComponentsInChildren<SetSaberGlowColor>(true))
-            glow.enabled = false;
+        glow.enabled = false;
         foreach (var fakeGlow in child.GetComponentsInChildren<SetSaberFakeGlowColor>(true))
-            fakeGlow.enabled = false;
+        fakeGlow.enabled = false;
 
         if (child.GetComponent<SaberModelController>() is { } mc) Object.DestroyImmediate(mc);
         if (vanillaTrail != null) Object.DestroyImmediate(vanillaTrail);
@@ -172,20 +172,20 @@ internal sealed class DefaultSaberProvider(
         rightDef.AssignedHand = SaberHand.Right;
         rightDef.ForceColorable = true;
 
-        Entry = SaberAssetEntry.Create(AssetTypeTag.SaberAsset, leftDef, rightDef, root);
+        Entry = SaberAssetEntry.Create(leftDef, rightDef, root);
         leftDef.OwnerEntry = Entry;
         rightDef.OwnerEntry = Entry;
 
         Entry.IsSPICompatible = true;
         Entry.SetPinned(_pins.Contains(DefaultSaberPath));
 
-        Preview = new(DefaultSaberPath, Entry, AssetTypeTag.SaberAsset);
+        Preview = new(DefaultSaberPath, Entry);
     }
 
     public void Register()
     {
         if (Entry is not null && Preview is not null)
-            _catalog.ShowDefaultSaberPreview(Preview);
+        _catalog.ShowDefaultSaberPreview(Preview);
     }
 
     public void Unregister()

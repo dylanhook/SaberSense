@@ -16,8 +16,6 @@ public sealed class PreviewRow
     public string DisplayName { get; set; } = "";
     public string CreatorName { get; set; } = "";
     public byte[]? CoverBytes { get; set; }
-    public int TypeTagKind { get; set; }
-    public int TypeTagCategory { get; set; }
     public bool IsSPICompatible { get; set; } = true;
     public int MetaVersion { get; set; }
     public string LastModified { get; set; } = "";
@@ -32,7 +30,7 @@ public sealed class PreviewDatabase : IDisposable
     public const int CurrentMetaVersion = 2;
 
     private const uint MAGIC = 0x53534342;
-    private const byte FormatVersion = 3;
+    private const byte FormatVersion = 4;
 
     private readonly string _filePath;
     private readonly IModLogger _log;
@@ -64,9 +62,9 @@ public sealed class PreviewDatabase : IDisposable
             if (magic != MAGIC) return;
             byte version = reader.ReadByte();
 
-            if (version > FormatVersion)
+            if (version != FormatVersion)
             {
-                _log.Warn($"Preview cache format v{version} is newer than supported v{FormatVersion} - will rebuild");
+                _log.Warn($"Preview cache format v{version} does not match supported v{FormatVersion} - will rebuild");
                 return;
             }
 
@@ -98,26 +96,16 @@ public sealed class PreviewDatabase : IDisposable
                     }
                     row.CoverBytes = coverLen is > 0 ? reader.ReadBytes(coverLen) : null;
 
-                    row.TypeTagKind = reader.ReadInt32();
-                    row.TypeTagCategory = reader.ReadInt32();
                     row.IsSPICompatible = reader.ReadBoolean();
                     row.MetaVersion = reader.ReadInt32();
                     row.LastModified = reader.ReadString();
-
-                    if (version >= 2)
-                    {
-                        row.FileSize = reader.ReadInt64();
-                        row.FileLastModifiedTicks = reader.ReadInt64();
-                    }
-
-                    if (version >= 3)
-                    {
-                        row.ContentHash = reader.ReadString();
-                        if (string.IsNullOrEmpty(row.ContentHash)) row.ContentHash = null;
-                    }
+                    row.FileSize = reader.ReadInt64();
+                    row.FileLastModifiedTicks = reader.ReadInt64();
+                    row.ContentHash = reader.ReadString();
+                    if (string.IsNullOrEmpty(row.ContentHash)) row.ContentHash = null;
 
                     if (row.RelativePath is not null)
-                        _cache[row.RelativePath] = row;
+                    _cache[row.RelativePath] = row;
                 }
             }
         }
@@ -136,7 +124,7 @@ public sealed class PreviewDatabase : IDisposable
         {
             var dir = Path.GetDirectoryName(_filePath);
             if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
-                Directory.CreateDirectory(dir);
+            Directory.CreateDirectory(dir);
 
             var tempPath = _filePath + ".tmp";
 
@@ -165,8 +153,6 @@ public sealed class PreviewDatabase : IDisposable
                             writer.Write(0);
                         }
 
-                        writer.Write(row.TypeTagKind);
-                        writer.Write(row.TypeTagCategory);
                         writer.Write(row.IsSPICompatible);
                         writer.Write(row.MetaVersion);
                         writer.Write(row.LastModified ?? "");
@@ -212,7 +198,7 @@ public sealed class PreviewDatabase : IDisposable
         lock (_lock)
         {
             if (_cache.Remove(relativePath))
-                _dirty = true;
+            _dirty = true;
         }
     }
 
@@ -224,6 +210,17 @@ public sealed class PreviewDatabase : IDisposable
         }
     }
 
+    public bool HasCurrentPreview(string relativePath, long fileSize, long fileLastModifiedTicks)
+    {
+        lock (_lock)
+        {
+            return _cache.TryGetValue(relativePath, out var row)
+            && row.MetaVersion >= CurrentMetaVersion
+            && row.FileSize == fileSize
+            && row.FileLastModifiedTicks == fileLastModifiedTicks;
+        }
+    }
+
     public byte[]? FindCoverByContentHash(string? contentHash)
     {
         if (string.IsNullOrEmpty(contentHash)) return null;
@@ -232,8 +229,8 @@ public sealed class PreviewDatabase : IDisposable
             foreach (var row in _cache.Values)
             {
                 if (row.CoverBytes is { Length: > 0 } &&
-                    string.Equals(row.ContentHash, contentHash, StringComparison.OrdinalIgnoreCase))
-                    return row.CoverBytes;
+                string.Equals(row.ContentHash, contentHash, StringComparison.OrdinalIgnoreCase))
+                return row.CoverBytes;
             }
         }
         return null;

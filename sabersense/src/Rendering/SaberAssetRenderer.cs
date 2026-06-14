@@ -3,12 +3,12 @@
 
 using IPA.Utilities.Async;
 using SaberSense.Catalog;
+using SaberSense.Catalog.Model;
+using SaberSense.Core;
 using SaberSense.Core.Logging;
 using SaberSense.Core.Utilities;
-using SaberSense.Profiles;
-using SaberSense.Profiles.SaberAsset;
+using SaberSense.Rendering.Materials;
 using SaberSense.Rendering.TrailGeometry;
-using SaberSense.Services;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -17,24 +17,28 @@ using UnityEngine;
 namespace SaberSense.Rendering;
 
 internal sealed class SaberAssetRenderer(
-    SaberAssetDefinition model,
-    List<IPartFinalizer> postProcessors,
-    TextureCacheRegistry textureRegistry,
-    Catalog.Data.IJsonProvider jsonProvider,
-    IModLogger log,
-    SharedMaterialPool materialPool)
-    : PieceRenderer(model, postProcessors)
+SaberAssetDefinition definition,
+List<IPartFinalizer> postProcessors,
+TextureCacheRegistry textureRegistry,
+Persistence.IJsonProvider jsonProvider,
+IModLogger log,
+SharedMaterialPool materialPool)
+: PieceRenderer(definition, postProcessors)
 {
-    public TrailSnapshot? TrailData { get; private set; }
+    public LiveTrail? LiveTrail { get; private set; }
 
     private readonly Newtonsoft.Json.JsonSerializer _json = jsonProvider.Json;
     private readonly IModLogger _log = log.ForSource(nameof(SaberAssetRenderer));
     private readonly MaterialNameResolver _nameResolver = new();
 
-    public Profiles.ConfigSnapshot? Snapshot { get; set; }
+    public Profiles.SaberCustomization? Customization { get; set; }
+
+    public MaterialPoolOwner PoolOwner { get; set; } = MaterialPoolOwner.Menu;
 
     private SetSaberGlowColor[] _glowComponents = [];
     private SetSaberFakeGlowColor[] _fakeGlowComponents = [];
+
+    private int[][] _glowPropertyIds = [];
 
     public override void Initialize()
     {
@@ -43,10 +47,26 @@ internal sealed class SaberAssetRenderer(
         _glowComponents = GameObject.GetComponentsInChildren<SetSaberGlowColor>(true);
         _fakeGlowComponents = GameObject.GetComponentsInChildren<SetSaberFakeGlowColor>(true);
 
-        var settings = Snapshot?.TrailSettings ?? ((SaberAssetDefinition)Definition).TrailSettings;
+        _glowPropertyIds = new int[_glowComponents.Length][];
+        for (var i = 0; i < _glowComponents.Length; i++)
+        {
+            var pairs = _glowComponents[i]._propertyTintColorPairs;
+            if (pairs is null)
+            {
+                _glowPropertyIds[i] = [];
+                continue;
+            }
+
+            var ids = new int[pairs.Length];
+            for (var j = 0; j < pairs.Length; j++)
+            ids[j] = Shader.PropertyToID(pairs[j].property);
+            _glowPropertyIds[i] = ids;
+        }
+
+        var settings = Customization?.TrailSettings ?? ((SaberAssetDefinition)Definition).TrailSettings;
 
         if (settings is null)
-            _log.Warn($"No trail settings for {Definition.AssignedHand} saber");
+        _log.Warn($"No trail settings for {Definition.AssignedHand} saber");
 
         ResolveTrails(GameObject, settings!);
     }
@@ -57,28 +77,31 @@ internal sealed class SaberAssetRenderer(
 
         if (Definition is not SaberAssetDefinition { ForceColorable: true }) return;
 
-        var overrides = Snapshot?.MaterialOverrides;
+        var overrides = Customization?.MaterialOverrides;
         var nameResolver = _nameResolver.BeginScope();
 
-        foreach (var glow in _glowComponents)
+        for (var i = 0; i < _glowComponents.Length; i++)
         {
+            var glow = _glowComponents[i];
             if (glow._meshRenderer == null || glow._propertyTintColorPairs is null) continue;
 
             string? matName = null;
             if (overrides?.Count is > 0 && glow._meshRenderer.sharedMaterial != null)
-                matName = nameResolver.Resolve(glow._meshRenderer.sharedMaterial);
+            matName = nameResolver.Resolve(glow._meshRenderer.sharedMaterial);
 
             if (!RendererBlocks.TryGetValue(glow._meshRenderer, out var block)) continue;
 
             glow._meshRenderer.GetPropertyBlock(block);
 
-            foreach (var pair in glow._propertyTintColorPairs)
+            var pairs = glow._propertyTintColorPairs;
+            for (var j = 0; j < pairs.Length; j++)
             {
-                if (matName is not null && overrides!.TryGetValue(matName, out var ovrObj) && ovrObj[pair.property] is not null)
-                    continue;
+                var pair = pairs[j];
 
-                var propId = Shader.PropertyToID(pair.property);
-                block.SetColor(propId, color * pair.tintColor);
+                if (matName is not null && overrides!.TryGetValue(matName, out var ovrObj) && ovrObj[pair.property] is not null)
+                continue;
+
+                block.SetColor(_glowPropertyIds[i][j], color * pair.tintColor);
             }
 
             glow._meshRenderer.SetPropertyBlock(block);
@@ -117,7 +140,7 @@ internal sealed class SaberAssetRenderer(
         }
 
         if (trailComponents is not { Length: > 0 })
-            trailComponents = [BuildSyntheticTrail(null, 1f, 0f, 12)];
+        trailComponents = [BuildSyntheticTrail(null, 1f, 0f, 12)];
 
         var primaryTrail = trailComponents[0];
         List<SaberTrailMarker>? extras = null;
@@ -126,7 +149,7 @@ internal sealed class SaberAssetRenderer(
         {
             extras = [];
             for (var i = 1; i < trailComponents.Length; i++)
-                Object.DestroyImmediate(trailComponents[i]);
+            Object.DestroyImmediate(trailComponents[i]);
 
             for (var i = 1; i < settings.OriginTrails.Count; i++)
             {
@@ -134,10 +157,10 @@ internal sealed class SaberAssetRenderer(
                 if (origin.PointStart == null || origin.PointEnd == null) continue;
 
                 extras.Add(BuildSyntheticTrail(
-                    origin.TrailMaterial,
-                    origin.PointEnd.localPosition.z,
-                    origin.PointStart.localPosition.z,
-                    origin.Length));
+                origin.TrailMaterial,
+                origin.PointEnd.localPosition.z,
+                origin.PointStart.localPosition.z,
+                origin.Length));
             }
         }
         else if (trailComponents.Length is > 1)
@@ -154,7 +177,7 @@ internal sealed class SaberAssetRenderer(
             {
                 settings.Material = new(new Material(freshMat));
                 if (freshMat.TryGetMainTexture(out var tex))
-                    settings.NativeTextureWrap = tex.wrapMode;
+                settings.NativeTextureWrap = tex.wrapMode;
 
                 if (settings.DeferredMaterialJson is not null)
                 {
@@ -173,8 +196,8 @@ internal sealed class SaberAssetRenderer(
         var reversed = start.localPosition.z > end.localPosition.z;
         if (reversed) (start, end) = (end, start);
 
-        TrailData?.Destroy();
-        TrailData = TrailSnapshot.Create(settings, start, end, reversed, extras);
+        LiveTrail?.Destroy();
+        LiveTrail = LiveTrail.Create(settings, start, end, reversed, extras);
     }
 
     protected override void CollectColorableMaterials(List<Material> results, List<Material> allOwned)
@@ -182,11 +205,11 @@ internal sealed class SaberAssetRenderer(
         var renderers = new List<Renderer>();
         GameObject.GetComponentsInChildren(true, renderers);
 
-        var definition = Definition as SaberAssetDefinition;
-        var overrides = Snapshot?.MaterialOverrides;
+        var saberDefinition = Definition as SaberAssetDefinition;
+        var overrides = Customization?.MaterialOverrides;
         var nameResolver = _nameResolver.BeginScope();
-        var hand = definition?.AssignedHand ?? SaberHand.Left;
-        var forceColorable = definition?.ForceColorable ?? false;
+        var hand = saberDefinition?.AssignedHand ?? SaberHand.Left;
+        var forceColorable = saberDefinition?.ForceColorable ?? false;
 
         foreach (var rend in renderers)
         {
@@ -199,31 +222,31 @@ internal sealed class SaberAssetRenderer(
                 if (mats[i] == null) continue;
 
                 bool isColorable = forceColorable
-                    ? mats[i].HasProperty(ShaderUtils.TintColorId)
-                    : ShaderUtils.SupportsSaberColoring(mats[i]);
+                ? mats[i].HasProperty(ShaderUtils.TintColorId)
+                : ShaderUtils.SupportsSaberColoring(mats[i]);
                 string baseName = nameResolver.Resolve(mats[i]);
                 Newtonsoft.Json.Linq.JObject? ovrObj = null;
                 bool hasOverrides = overrides is not null && overrides.TryGetValue(baseName, out ovrObj);
 
-                bool isNew = !materialPool.Contains(baseName, hand);
-                mats[i] = materialPool.GetOrClone(baseName, mats[i], hand);
+                bool isNew = !materialPool.Contains(PoolOwner, baseName, hand);
+                mats[i] = materialPool.GetOrClone(PoolOwner, baseName, mats[i], hand);
                 materialsChanged = true;
 
                 if (isColorable)
-                    results.Add(mats[i]);
+                results.Add(mats[i]);
 
                 if (isNew && hasOverrides)
-                    ApplyMaterialOverrides(mats[i], ovrObj!, hand);
+                ApplyMaterialOverrides(mats[i], ovrObj!, hand);
             }
 
             if (materialsChanged)
-                rend.sharedMaterials = mats;
+            rend.sharedMaterials = mats;
         }
     }
 
     private void ApplyMaterialOverrides(Material mat, Newtonsoft.Json.Linq.JObject overrides, SaberHand hand)
     {
-        var asyncTextures = Services.MaterialPropertyApplier.ApplyAll(mat, overrides, hand, _json, textureRegistry);
+        var asyncTextures = MaterialPropertyApplier.ApplyAll(mat, overrides, hand, _json, textureRegistry);
         if (asyncTextures is null) return;
 
         foreach (var (propId, texName) in asyncTextures)
@@ -251,19 +274,19 @@ internal sealed class SaberAssetRenderer(
     {
         (Definition as SaberAssetDefinition)?.ReparentTrails();
         var prefab = Definition!.AuxObjects!.GetHandObject(Definition.AssignedHand)
-            ?? throw new System.InvalidOperationException(
-                $"[SaberAssetRenderer] Prefab for '{Definition.Asset?.RelativePath ?? "?"}' " +
-                $"(hand={Definition.AssignedHand}) is null - the asset bundle was destroyed " +
-                "during a scene transition. EnsureAssetsValidAsync should have been called upstream.");
+        ?? throw new System.InvalidOperationException(
+        $"[SaberAssetRenderer] Prefab for '{Definition.Asset?.RelativePath ?? "?"}' " +
+        $"(hand={Definition.AssignedHand}) is null - the asset bundle was destroyed " +
+        "during a scene transition. EnsureAssetsValidAsync should have been called upstream.");
 
         var instance = Object.Instantiate(prefab, Vector3.zero, Quaternion.identity);
         instance.SetActive(true);
 
-        var transformOverrides = Snapshot?.Transform
-            ?? (Definition as SaberAssetDefinition)?.Properties?.Transform;
-        TransformBlockHandler = new SaberAssetTransformHandler(instance, transformOverrides);
+        TransformBlockHandler = new SaberAssetTransformHandler(instance, Customization?.Transform ?? new());
         foreach (var pp in PostProcessors) pp.ProcessPart(instance);
 
         return instance;
     }
+
+    internal sealed class Factory : Zenject.PlaceholderFactory<SaberAssetDefinition, SaberAssetRenderer> { }
 }

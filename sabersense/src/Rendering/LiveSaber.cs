@@ -2,11 +2,12 @@
 // Licensed under the SaberSense Proprietary License. See LICENSE file in the project root.
 
 using CameraUtils.Core;
-using SaberSense.Catalog.Data;
+using SaberSense.Catalog.Model;
 using SaberSense.Configuration;
+using SaberSense.Core;
 using SaberSense.Core.Utilities;
+using SaberSense.Persistence;
 using SaberSense.Profiles;
-using SaberSense.Profiles.SaberAsset;
 using SaberSense.Rendering.TrailGeometry;
 using System;
 using System.Collections.Generic;
@@ -17,8 +18,8 @@ using Zenject;
 namespace SaberSense.Rendering;
 
 internal readonly record struct TrailLayout(
-    TrailSnapshot? Primary,
-    IReadOnlyList<SaberTrailMarker> AuxMarkers)
+LiveTrail? Primary,
+IReadOnlyList<SaberTrailMarker> AuxMarkers)
 {
     internal static readonly TrailLayout None = new(null, Array.Empty<SaberTrailMarker>());
 }
@@ -30,50 +31,59 @@ public class LiveSaber
     internal ITrailDriver? TrailHandler { get; set; }
     internal SaberSense.Gameplay.SaberEventDispatcher? EventDispatcher { get; private set; }
     internal readonly SaberProfile Profile;
-    internal readonly PieceRegistry<PieceRenderer> Pieces;
+
+    internal SaberAssetRenderer? Renderer { get; private set; }
 
     public readonly Transform CachedTransform;
     public readonly GameObject GameObject;
     public PlayerTransforms? PlayerTransforms { get; internal set; }
 
-    private readonly ModSettings _trailConfig;
+    private readonly TrailConfig _trailConfig;
     private readonly PlayerDataModel _playerDataModel;
     private readonly LiveSaberRegistry _activeInstances;
     private readonly ShaderRegistry _shaders;
 
-    private TrailController? _trailController;
-    private SaberMotionBlur? _motionBlur;
+    private readonly SaberSense.Rendering.Materials.MaterialPoolOwner _poolOwner;
 
-    internal event Action? OnDestroyed;
+    private TrailController? _trailController;
+
+    private GameObject? _eventTargetRoot;
+
+    private readonly List<ISaberEffect> _effects = new();
 
     [Inject]
     internal LiveSaber(
-        SaberProfile profile,
-        PieceRenderer.Factory rendererFactory,
-        ModSettings trailConfig,
-        List<ISaberFinalizer> postProcessors,
-        PlayerDataModel playerDataModel,
-        LiveSaberRegistry saberInstanceList,
-        ShaderRegistry shaders,
-        IJsonProvider jsonProvider)
+    SaberProfile profile,
+    SaberSense.Rendering.Materials.MaterialPoolOwner poolOwner,
+    SaberAssetRenderer.Factory rendererFactory,
+    ModSettings settings,
+    List<ISaberEffect> effects,
+    PlayerDataModel playerDataModel,
+    LiveSaberRegistry saberInstanceList,
+    ShaderRegistry shaders,
+    IJsonProvider jsonProvider)
     {
-        _trailConfig = trailConfig;
+        _trailConfig = settings.Trail;
         _playerDataModel = playerDataModel;
         _activeInstances = saberInstanceList;
         _shaders = shaders;
+        _poolOwner = poolOwner;
 
         Profile = profile;
         GameObject = new GameObject(DisplayName);
         DestroySentinel.Attach(GameObject, OnGameObjectDestroyed);
 
         CachedTransform = GameObject.transform;
-        Pieces = new();
 
         ApplyColorSchemeGlobals();
         ApplyScale();
-        AssemblePieces(rendererFactory, jsonProvider);
+        SpawnRenderer(rendererFactory, jsonProvider);
 
-        foreach (var pp in postProcessors) pp.ProcessSaber(this);
+        foreach (var effect in effects)
+        {
+            effect.ProcessSaber(this);
+            _effects.Add(effect);
+        }
 
         InjectEventsFromPieces();
 
@@ -84,14 +94,15 @@ public class LiveSaber
 
     public void SetColor(Color color)
     {
-        foreach (var piece in Pieces) piece.ApplyColor(color);
+        Renderer?.ApplyColor(color);
 
         TrailHandler?.SetColor(color);
         _trailController?.TintSecondaryTrails(color);
-        _motionBlur?.RefreshColors();
+
+        foreach (var effect in _effects) effect.OnColorChanged(color);
     }
 
-    internal void SwapToHand(SaberHand hand, SaberSense.Services.SharedMaterialPool pool)
+    internal void SwapToHand(SaberHand hand, SaberSense.Rendering.Materials.SharedMaterialPool pool)
     {
         var resolver = new SaberSense.Core.Utilities.MaterialNameResolver();
         var renderers = new List<Renderer>();
@@ -110,7 +121,7 @@ public class LiveSaber
             {
                 if (mats[i] == null) continue;
                 string baseName = resolver.Resolve(mats[i]);
-                var poolMat = pool.Get(baseName, hand);
+                var poolMat = pool.Get(_poolOwner, baseName, hand);
                 if (poolMat != null && poolMat != mats[i])
                 {
                     swaps.Add((mats[i], poolMat));
@@ -125,13 +136,13 @@ public class LiveSaber
             if (changed) rend.sharedMaterials = mats;
         }
 
-        foreach (var piece in Pieces)
+        if (Renderer is { } piece)
         {
             foreach (var (old, @new) in swaps)
-                piece.SwapTintMaterial(old, @new);
+            piece.SwapTintMaterial(old, @new);
 
             if (unswapped.Count is > 0)
-                piece.ClearUnswappedTintMaterials(unswapped);
+            piece.ClearUnswappedTintMaterials(unswapped);
         }
     }
 
@@ -145,12 +156,12 @@ public class LiveSaber
 
     public void SetMotionBlurVisibilityLayer(CameraUtils.Core.VisibilityLayer layer)
     {
-        _motionBlur?.SetLayer((int)layer);
+        foreach (var effect in _effects) effect.OnVisibilityLayerChanged(layer);
     }
 
     public void RefreshMotionBlurColors()
     {
-        _motionBlur?.RefreshColors();
+        foreach (var effect in _effects) effect.OnColorChanged(default);
     }
 
     public void CreateTrail(bool editorMode, global::SaberTrail? fallbackTrail = null)
@@ -162,16 +173,18 @@ public class LiveSaber
 
     public void CreateMotionBlur(float strength)
     {
-        if (_motionBlur != null) return;
+        foreach (var effect in _effects)
+        if (effect is SaberMotionBlur) return;
 
-        _motionBlur = GameObject.AddComponent<SaberMotionBlur>();
-        _motionBlur.Strength = strength;
+        var motionBlur = GameObject.AddComponent<SaberMotionBlur>();
+        motionBlur.Strength = strength;
 
         (float, float)? bounds = null;
         if (TryGetSaberAssetRenderer(out var sar) && sar!.Definition is SaberAssetDefinition def)
-            bounds = def.Asset?.ParsedBounds;
+        bounds = def.Asset?.ParsedBounds;
 
-        _motionBlur.Init(GameObject, bounds, _shaders.InternalColored);
+        motionBlur.Init(GameObject, bounds, _shaders.InternalColored);
+        _effects.Add(motionBlur);
     }
 
     public void DestroyTrail(bool immediate = false)
@@ -185,19 +198,18 @@ public class LiveSaber
     {
         _activeInstances.Unregister(this);
 
-        OnDestroyed?.Invoke();
         GameObject?.TryDestroy();
     }
 
     public void SetSaberWidth(float width)
     {
-        Profile.Scale.Width = width;
+        Profile.Scale.Width = SaberScale.Clamp(width);
         ApplyScale();
     }
 
     public void SetSaberLength(float length)
     {
-        Profile.Scale.Length = length;
+        Profile.Scale.Length = SaberScale.Clamp(length);
         ApplyScale();
     }
 
@@ -205,46 +217,41 @@ public class LiveSaber
     {
         var s = Profile.Scale;
         if (GameObject != null)
-            GameObject.transform.localScale = new Vector3(s.Width, s.Width, s.Length);
-        _motionBlur?.NotifyTransformChanged();
+        GameObject.transform.localScale = new Vector3(s.Width, s.Width, s.Length);
+        foreach (var effect in _effects) effect.OnScaleChanged();
     }
 
     internal static void WithTransformApplier(LiveSaber? saber, Action<TransformApplier> action)
     {
         if (saber is null) return;
         if (!saber.TryGetSaberAssetRenderer(out var renderer)) return;
-        if (renderer!.TransformBlockHandler is SaberAssetTransformHandler handler && handler.Applier is not null)
-            action(handler.Applier);
+        if (renderer!.TransformBlockHandler is { } handler)
+        action(handler.Applier);
     }
 
-    internal static void WithTrailData(LiveSaber? saber, Action<TrailSnapshot> action)
+    internal static void WithLiveTrail(LiveSaber? saber, Action<LiveTrail> action)
     {
         if (saber is null) return;
-        var td = saber.GetTrailLayout().Primary;
-        if (td is not null) action(td);
+        var trail = saber.GetTrailLayout().Primary;
+        if (trail is not null) action(trail);
     }
 
     internal bool TryGetSaberAssetRenderer(out SaberAssetRenderer? renderer)
     {
-        if (Pieces.TryGet(AssetTypeTag.SaberAsset, out var piece) && piece is SaberAssetRenderer csr)
-        {
-            renderer = csr;
-            return true;
-        }
-        renderer = null;
-        return false;
+        renderer = Renderer;
+        return renderer is not null;
     }
 
     internal TrailLayout GetTrailLayout()
     {
-        if (!TryGetSaberAssetRenderer(out var renderer) || renderer!.TrailData is not { } data)
-            return TrailLayout.None;
+        if (!TryGetSaberAssetRenderer(out var renderer) || renderer!.LiveTrail is not { } trail)
+        return TrailLayout.None;
 
-        var aux = data.AuxTrails is { Count: > 0 }
-            ? (IReadOnlyList<SaberTrailMarker>)data.AuxTrails.Select(t => t.Trail).ToList()
-            : Array.Empty<SaberTrailMarker>();
+        var aux = trail.AuxTrails is { Count: > 0 }
+        ? (IReadOnlyList<SaberTrailMarker>)trail.AuxTrails.Select(t => t.Trail).ToList()
+        : Array.Empty<SaberTrailMarker>();
 
-        return new TrailLayout(data, aux);
+        return new TrailLayout(trail, aux);
     }
 
     internal void ActivateForGameplay(Transform parent, global::SaberTrail? fallbackTrail)
@@ -263,8 +270,6 @@ public class LiveSaber
         }
     }
 
-    private GameObject? _eventTargetRoot;
-
     private void InjectEventsFromPieces()
     {
         if (!TryGetSaberAssetRenderer(out var sar)) return;
@@ -277,7 +282,7 @@ public class LiveSaber
         {
             _eventTargetRoot = new GameObject("SS_EventTargets");
             _eventTargetRoot.transform.SetPositionAndRotation(
-                prefabRoot.transform.position, prefabRoot.transform.rotation);
+            prefabRoot.transform.position, prefabRoot.transform.rotation);
             _eventTargetRoot.transform.localScale = prefabRoot.transform.localScale;
 
             for (int i = 0; i < prefabRoot.transform.childCount; i++)
@@ -289,64 +294,44 @@ public class LiveSaber
             }
         }
 
-        EventDispatcher = Core.Utilities.PrefabComponentInjector.InjectEvents(
-            GameObject, parseResult, _eventTargetRoot);
+        EventDispatcher = AssetPipeline.Assembly.PrefabComponentInjector.InjectEvents(
+        GameObject, parseResult, _eventTargetRoot);
     }
 
-    private void AssemblePieces(PieceRenderer.Factory rendererFactory, IJsonProvider jsonProvider)
+    private void SpawnRenderer(SaberAssetRenderer.Factory rendererFactory, IJsonProvider jsonProvider)
     {
-        if (Profile.Pieces.TryGet(AssetTypeTag.SaberAsset, out var wholeDef))
-        {
-            SpawnPiece(AssetTypeTag.SaberAsset, wholeDef, rendererFactory, jsonProvider);
-            return;
-        }
+        if (Profile.Equipped is not { } definition) return;
 
-        ReadOnlySpan<PartCategory> partOrder = [
-            PartCategory.Pommel, PartCategory.Handle, PartCategory.Emitter, PartCategory.Blade
-        ];
-
-        foreach (var part in partOrder)
-        {
-            var tag = new AssetTypeTag(AssetKind.Model, part);
-            if (Profile.Pieces.TryGet(tag, out var def))
-                SpawnPiece(tag, def, rendererFactory, jsonProvider);
-        }
-    }
-
-    private void SpawnPiece(AssetTypeTag tag, PieceDefinition definition,
-        PieceRenderer.Factory rendererFactory, IJsonProvider jsonProvider)
-    {
         var renderer = rendererFactory.Create(definition);
 
-        if (renderer is SaberAssetRenderer sar)
-            sar.Snapshot = Profile.Snapshot;
+        renderer.Customization = Profile.Customization;
+        renderer.PoolOwner = _poolOwner;
 
         renderer.Initialize();
         renderer.AttachTo(CachedTransform);
-        Pieces.Register(tag, renderer);
+        Renderer = renderer;
 
-        var snapshot = Profile.Snapshot;
-        if (snapshot?.ModifierState is not null && definition.ComponentModifiers is not null)
-            _ = snapshot.ApplyModifierState(definition.ComponentModifiers, jsonProvider);
+        var customization = Profile.Customization;
+        if (customization?.ModifierState is not null && definition.ComponentModifiers is not null)
+        customization.ApplyModifierState(definition.ComponentModifiers, jsonProvider);
     }
 
     private void OnGameObjectDestroyed()
     {
+        _trailController?.DisposePrimaryMaterialIfOrphaned(Profile?.Customization?.TrailSettings?.Material);
         DestroyTrail();
-        if (_motionBlur != null)
-        {
-            UnityEngine.Object.Destroy(_motionBlur);
-            _motionBlur = null;
-        }
+
+        foreach (var effect in _effects) effect.OnTeardown();
+        _effects.Clear();
         if (_eventTargetRoot != null)
         {
             UnityEngine.Object.Destroy(_eventTargetRoot);
             _eventTargetRoot = null;
         }
-        foreach (var piece in Pieces) piece.Dispose();
+        Renderer?.Dispose();
     }
 
-    internal sealed class Factory : PlaceholderFactory<SaberProfile, LiveSaber> { }
+    internal sealed class Factory : PlaceholderFactory<SaberProfile, SaberSense.Rendering.Materials.MaterialPoolOwner, LiveSaber> { }
 }
 
 internal sealed class DestroySentinel : MonoBehaviour

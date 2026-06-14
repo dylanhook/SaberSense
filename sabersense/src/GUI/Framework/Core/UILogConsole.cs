@@ -123,7 +123,7 @@ internal sealed class UILogConsole : UIElement
         var textLayout = textGO.AddComponent<LayoutElement>();
         textLayout.flexibleWidth = 1;
 
-        _scrollRect = GameObject.AddComponent<UIGroupBox.VRSafeScrollRect>();
+        _scrollRect = GameObject.AddComponent<VRSafeScrollRect>();
         _scrollRect.viewport = viewportRect;
         _scrollRect.content = contentRect;
         _scrollRect.horizontal = false;
@@ -168,7 +168,7 @@ internal sealed class UILogConsole : UIElement
         dummyHandleRect.anchorMax = Vector2.one;
         dummyHandleRect.sizeDelta = Vector2.zero;
 
-        var scrollbar = scrollbarGO.AddComponent<UIGroupBox.VRSafeScrollbar>();
+        var scrollbar = scrollbarGO.AddComponent<VRSafeScrollbar>();
         scrollbar.handleRect = dummyHandleRect;
         scrollbar.direction = Scrollbar.Direction.BottomToTop;
         scrollbar.targetGraphic = handleImg;
@@ -179,7 +179,7 @@ internal sealed class UILogConsole : UIElement
         _scrollRect.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.AutoHide;
         _scrollRect.verticalScrollbarSpacing = 0;
 
-        var guard = GameObject.AddComponent<UIGroupBox.ContentGuard>();
+        var guard = GameObject.AddComponent<ContentGuard>();
         guard.Init(_scrollRect, viewportRect, contentRect);
     }
 
@@ -201,7 +201,7 @@ internal sealed class UILogConsole : UIElement
     public void AppendEntry(LogEntry entry)
     {
         if (!ReferenceEquals(System.Threading.Thread.CurrentThread,
-                _mainThread))
+        _mainThread))
         {
             _offThreadQueue.Enqueue(entry);
             return;
@@ -271,18 +271,18 @@ internal sealed class UILogConsole : UIElement
         if (_flushCoroutine != null) return;
         var mono = _scrollRect != null ? _scrollRect.GetComponent<MonoBehaviour>() : null;
         if (mono != null && mono.isActiveAndEnabled)
-            _flushCoroutine = mono.StartCoroutine(DeferredFlush());
+        _flushCoroutine = mono.StartCoroutine(DeferredFlush());
     }
 
     private System.Collections.IEnumerator DeferredFlush()
     {
         for (int i = 0; i < ThrottleFrames; i++)
-            yield return null;
+        yield return null;
 
         _flushCoroutine = null;
         DrainOffThreadQueue();
         if (_pendingFlush)
-            FlushToTMP(Time.frameCount);
+        FlushToTMP(Time.frameCount);
     }
 
     private void AppendEntryToBuilder(LogEntry entry)
@@ -325,13 +325,13 @@ internal sealed class UILogConsole : UIElement
 
         var mono = _scrollRect.GetComponent<MonoBehaviour>();
         if (mono != null && mono.isActiveAndEnabled)
-            mono.StartCoroutine(DeferredScrollToBottom());
+        mono.StartCoroutine(DeferredScrollToBottom());
     }
 
     private System.Collections.IEnumerator DeferredScrollToBottom()
     {
         yield return null;
         if (_scrollRect != null)
-            _scrollRect.verticalNormalizedPosition = 0f;
+        _scrollRect.verticalNormalizedPosition = 0f;
     }
 }

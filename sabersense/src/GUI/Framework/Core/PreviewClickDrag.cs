@@ -7,7 +7,7 @@ using UnityEngine.EventSystems;
 namespace SaberSense.GUI.Framework.Core;
 
 internal sealed class PreviewClickDrag : MonoBehaviour, IPointerDownHandler, IPointerUpHandler,
-    IInitializePotentialDragHandler, IBeginDragHandler, IDragHandler, IEndDragHandler
+IInitializePotentialDragHandler, IBeginDragHandler, IDragHandler, IEndDragHandler
 {
     private const float MaxDeltaSqr = 6400f;
     public bool Held { get; private set; }
@@ -49,7 +49,7 @@ internal sealed class PreviewClickDrag : MonoBehaviour, IPointerDownHandler, IPo
     public void OnInitializePotentialDrag(PointerEventData eventData)
     {
         if (eventData is not null)
-            eventData.useDragThreshold = false;
+        eventData.useDragThreshold = false;
     }
 
     public void OnBeginDrag(PointerEventData eventData)
@@ -88,6 +88,6 @@ internal sealed class PreviewClickDrag : MonoBehaviour, IPointerDownHandler, IPo
             JustReleased = true;
         }
         if (eventData is not null)
-            eventData.Use();
+        eventData.Use();
     }
 }

@@ -1,15 +1,13 @@
 // Copyright (c) 2026 dylanhook. All rights reserved.
 // Licensed under the SaberSense Proprietary License. See LICENSE file in the project root.
 
-using IPA.Utilities.Async;
 using Newtonsoft.Json.Linq;
-using SaberSense.Catalog;
-using SaberSense.Catalog.Data;
+using SaberSense.App;
 using SaberSense.Configuration;
-using SaberSense.Core;
 using SaberSense.Core.Logging;
 using SaberSense.Core.Messaging;
-using SaberSense.Core.Utilities;
+using SaberSense.Loadout;
+using SaberSense.Persistence;
 using SaberSense.Profiles;
 using System;
 using System.Collections.Generic;
@@ -22,7 +20,7 @@ namespace SaberSense.Services;
 
 internal readonly record struct ConfigInfo(string Name, bool IsDefault, bool IsActive);
 
-internal sealed class ConfigManager : IDisposable
+internal sealed class ConfigManager : IConfigStore, IDisposable
 {
     private const string FileExtension = ".sabersense";
     private const string DefaultConfigName = "default";
@@ -34,33 +32,37 @@ internal sealed class ConfigManager : IDisposable
     private readonly string _configDir;
     private readonly IMessageBroker _broker;
     private readonly AssetRecoveryService _recovery;
+    private readonly ConfigFileWatcher _watcher;
+    private readonly SaberCompatibilityPolicy _compatibilityPolicy;
     private readonly IModLogger _log;
 
-    private FileSystemWatcher? _fsw;
-    private volatile bool _configListStale;
-    private int _refreshPosted;
+    private volatile int _isLoading;
+    private volatile int _isSaving;
 
-    private int _isLoading;
-    private int _isSaving;
+    private readonly SemaphoreSlim _io = new(1, 1);
 
     public Task? CurrentTask { get; private set; }
 
-    public event Action? OnConfigsChanged;
+    public event Action? OnConfigsChanged
+    {
+        add => _watcher.OnConfigsChanged += value;
+        remove => _watcher.OnConfigsChanged -= value;
+    }
 
     public string ConfigDirectory => _configDir;
 
     private string ActiveConfigPath => GetFilePath(_internalConfig.ActiveConfigName ?? DefaultConfigName);
 
     public ConfigManager(
-        SaberLoadout loadout,
-        Serializer serializer,
-        InternalConfig internalConfig,
-        SaberCatalog catalog,
-        LoadoutCoordinator coordinator,
-        SessionController session,
-        AppPaths paths,
-        IMessageBroker broker,
-        IModLogger log)
+    SaberLoadout loadout,
+    Serializer serializer,
+    InternalConfig internalConfig,
+    AssetRecoveryService recovery,
+    SaberCompatibilityPolicy compatibilityPolicy,
+    SessionController session,
+    AppPaths paths,
+    IMessageBroker broker,
+    IModLogger log)
     {
         _loadout = loadout;
         _serializer = serializer;
@@ -68,24 +70,56 @@ internal sealed class ConfigManager : IDisposable
         _session = session;
         _configDir = paths.ConfigsRoot.FullName;
         _broker = broker;
+        _recovery = recovery;
+        _compatibilityPolicy = compatibilityPolicy;
         _log = log.ForSource(nameof(ConfigManager));
 
-        _recovery = new AssetRecoveryService(
-            loadout, catalog, coordinator, log);
+        _watcher = new ConfigFileWatcher(
+        _configDir, $"*{FileExtension}",
+        () => _isLoading != 0 || _isSaving != 0,
+        log);
     }
 
-    public async Task InitializeLoadoutAsync()
+    private async Task RunExclusiveAsync(Func<Task> body)
+    {
+        await _io.WaitAsync();
+        try
+        {
+            await body();
+        }
+        finally
+        {
+            _io.Release();
+        }
+    }
+
+    private void WriteEnvelope(string path, JObject payload)
+    {
+        Interlocked.Exchange(ref _isSaving, 1);
+        try
+        {
+            ConfigEnvelope.WriteToDisk(path, payload);
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _isSaving, 0);
+        }
+    }
+
+    public Task InitializeLoadoutAsync() => RunExclusiveAsync(InitializeLoadoutCore);
+
+    private async Task InitializeLoadoutCore()
     {
         var cfgPath = ActiveConfigPath;
         _log.Debug($"InitializeLoadout: activeConfig='{_internalConfig.ActiveConfigName}' path='{cfgPath}'");
 
         var restorePhase = _session.Phase is SessionPhase.Editing
-            ? SessionPhase.Editing : SessionPhase.Idle;
+        ? SessionPhase.Editing : SessionPhase.Idle;
 
         if (!File.Exists(cfgPath))
         {
             _log.Info($"Config '{_internalConfig.ActiveConfigName}' not found -- creating with defaults.");
-            await ForcePersistAsync();
+            await ForcePersistCore();
             _session.TransitionTo(restorePhase);
             return;
         }
@@ -95,11 +129,11 @@ internal sealed class ConfigManager : IDisposable
             var payload = ConfigEnvelope.ReadFromDisk(cfgPath);
             using (_loadout.ConfigLoadScope())
             {
-                CurrentTask = _loadout.FromJson(payload, _serializer);
+                CurrentTask = _loadout.ReadFromAsync(payload, _serializer);
                 await CurrentTask;
             }
 
-            DeselectIncompatibleSabers();
+            _compatibilityPolicy.DeselectIncompatibleSabers();
         }
         catch (Exception ex)
         {
@@ -112,84 +146,34 @@ internal sealed class ConfigManager : IDisposable
         }
     }
 
-    public async Task ForcePersistAsync()
+    public Task ForcePersistAsync() => RunExclusiveAsync(ForcePersistCore);
+
+    private Task ForcePersistCore()
     {
         _log.Debug($"ForcePersist: activeConfig='{_internalConfig.ActiveConfigName}' saber={GetEquippedSaberName()}");
-        var token = await _loadout.ToJson(_serializer);
+        var token = _loadout.WriteTo(_serializer);
         if (token is JObject obj)
         {
             var path = ActiveConfigPath;
-            ConfigEnvelope.WriteToDisk(path, obj);
+            WriteEnvelope(path, obj);
             _log.Info($"ForcePersist written to '{Path.GetFileName(path)}'");
         }
         else
         {
-            _log.Warn("ForcePersist: ToJson returned null or non-object");
+            _log.Warn("ForcePersist: WriteTo returned null or non-object");
         }
+        return Task.CompletedTask;
     }
 
     public Task EnsureAssetsValidAsync() => _recovery.EnsureAssetsValidAsync();
 
-    public void StartWatching()
-    {
-        if (_fsw is not null) return;
-        if (!Directory.Exists(_configDir)) return;
+    public void StartWatching() => _watcher.StartWatching();
 
-        try
-        {
-            _fsw = new FileSystemWatcher(_configDir, $"*{FileExtension}")
-            {
-                NotifyFilter = NotifyFilters.FileName | NotifyFilters.CreationTime | NotifyFilters.LastWrite,
-                EnableRaisingEvents = true
-            };
-            _fsw.Created += OnFileSystemEvent;
-            _fsw.Deleted += OnFileSystemEvent;
-            _fsw.Renamed += OnFileSystemEvent;
-            _fsw.Changed += OnFileSystemEvent;
-            _fsw.Error += (_, e) => _log.Debug($"Watcher error: {e.GetException().Message}");
-        }
-        catch (Exception ex)
-        {
-            _log.Debug($"Failed to start watcher: {ex.Message}");
-            _fsw?.Dispose();
-            _fsw = null;
-        }
-    }
+    public void StopWatching() => _watcher.StopWatching();
 
-    public void StopWatching()
-    {
-        if (_fsw is null) return;
+    public Task ValidateActiveConfigAsync() => RunExclusiveAsync(ValidateActiveConfigCore);
 
-        _fsw.Created -= OnFileSystemEvent;
-        _fsw.Deleted -= OnFileSystemEvent;
-        _fsw.Renamed -= OnFileSystemEvent;
-        _fsw.Changed -= OnFileSystemEvent;
-        _fsw.EnableRaisingEvents = false;
-        _fsw.Dispose();
-        _fsw = null;
-    }
-
-    private void OnFileSystemEvent(object sender, FileSystemEventArgs e)
-    {
-        if (_isLoading != 0 || _isSaving != 0) return;
-
-        _configListStale = true;
-
-        if (Interlocked.CompareExchange(ref _refreshPosted, 1, 0) == 0)
-        {
-            UnityMainThreadTaskScheduler.Factory.StartNew(() =>
-            {
-                Interlocked.Exchange(ref _refreshPosted, 0);
-                if (_configListStale)
-                {
-                    _configListStale = false;
-                    OnConfigsChanged?.Invoke();
-                }
-            });
-        }
-    }
-
-    public async Task ValidateActiveConfigAsync()
+    private async Task ValidateActiveConfigCore()
     {
         var active = _internalConfig.ActiveConfigName ?? DefaultConfigName;
         var path = GetFilePath(active);
@@ -205,7 +189,7 @@ internal sealed class ConfigManager : IDisposable
             if (!File.Exists(defaultPath))
             {
                 _log.Info($"Recreating missing default config at '{defaultPath}'");
-                await ForcePersistAsync();
+                await ForcePersistCore();
             }
         }
     }
@@ -218,10 +202,10 @@ internal sealed class ConfigManager : IDisposable
         if (Directory.Exists(_configDir))
         {
             var files = Directory.GetFiles(_configDir, $"*{FileExtension}")
-                .Select(f => Path.GetFileNameWithoutExtension(f))
-                .Where(n => !string.IsNullOrWhiteSpace(n))
-                .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
-                .ToList();
+            .Select(f => Path.GetFileNameWithoutExtension(f))
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+            .ToList();
 
             foreach (var name in files)
             {
@@ -233,22 +217,23 @@ internal sealed class ConfigManager : IDisposable
         return list;
     }
 
-    public async Task SaveAsync(string name)
+    public Task SaveAsync(string name) => RunExclusiveAsync(() => SaveCore(name));
+
+    private Task SaveCore(string name)
     {
-        if (string.IsNullOrWhiteSpace(name)) return;
+        if (string.IsNullOrWhiteSpace(name)) return Task.CompletedTask;
         name = SanitizeName(name);
 
-        var payload = await _loadout.ToJson(_serializer);
-        if (payload is not JObject obj) return;
+        var payload = _loadout.WriteTo(_serializer);
+        if (payload is not JObject obj) return Task.CompletedTask;
 
         var path = GetFilePath(name);
-        System.Threading.Interlocked.Exchange(ref _isSaving, 1);
-        try { ConfigEnvelope.WriteToDisk(path, obj); }
-        finally { System.Threading.Interlocked.Exchange(ref _isSaving, 0); }
+        WriteEnvelope(path, obj);
 
         _internalConfig.ActiveConfigName = name;
         _internalConfig.Save();
         _log.Info($"Saved config '{name}'");
+        return Task.CompletedTask;
     }
 
     public async Task LoadAsync(string name)
@@ -288,11 +273,12 @@ internal sealed class ConfigManager : IDisposable
             var prevPhase = _session.Phase;
             _session.TransitionTo(SessionPhase.LoadingConfig);
 
+            await _io.WaitAsync();
             try
             {
                 using (_loadout.ConfigLoadScope())
                 {
-                    await _loadout.FromJson(payload, _serializer);
+                    await _loadout.ReadFromAsync(payload, _serializer);
                     _internalConfig.ActiveConfigName = name;
                     _internalConfig.Save();
                     _log.Info($"Loaded config '{name}'");
@@ -305,6 +291,7 @@ internal sealed class ConfigManager : IDisposable
             }
             finally
             {
+                _io.Release();
                 _session.TransitionTo(prevPhase is SessionPhase.Editing ? SessionPhase.Editing : SessionPhase.Idle);
             }
 
@@ -322,7 +309,7 @@ internal sealed class ConfigManager : IDisposable
     public bool Delete(string name)
     {
         if (string.IsNullOrWhiteSpace(name) ||
-            string.Equals(name, DefaultConfigName, StringComparison.OrdinalIgnoreCase)) return false;
+        string.Equals(name, DefaultConfigName, StringComparison.OrdinalIgnoreCase)) return false;
 
         var path = GetFilePath(name);
         if (!File.Exists(path)) return false;
@@ -349,29 +336,37 @@ internal sealed class ConfigManager : IDisposable
 
     public async Task ResetToDefaultsAsync()
     {
-        await _loadout.FromJson(new JObject(), _serializer);
+        await _io.WaitAsync();
+        try
+        {
+            await _loadout.ReadFromAsync(new JObject(), _serializer);
 
-        _loadout.Settings.ResetToDefaults();
+            _loadout.Settings.ResetToDefaults();
+        }
+        finally
+        {
+            _io.Release();
+        }
 
         _log.Info("Reset loadout + settings to defaults (in memory -- not saved)");
         _broker?.Publish(new ConfigLoadedMsg());
     }
 
-    public async Task<string?> ExportAsync()
+    public Task<string?> ExportAsync()
     {
         try
         {
-            var payload = await _loadout.ToJson(_serializer);
-            if (payload is not JObject obj) return null;
+            var payload = _loadout.WriteTo(_serializer);
+            if (payload is not JObject obj) return Task.FromResult<string?>(null);
 
             var result = ConfigEnvelope.ToClipboardString(obj);
             _log.Info($"Exported config ({result.Length} chars)");
-            return result;
+            return Task.FromResult<string?>(result);
         }
         catch (Exception ex)
         {
             _log.Error($"Export failed: {ex.Message}");
-            return null;
+            return Task.FromResult<string?>(null);
         }
     }
 
@@ -389,7 +384,15 @@ internal sealed class ConfigManager : IDisposable
             _broker?.Publish(new ConfigLoadingMsg());
             using (_loadout.ConfigLoadScope())
             {
-                await _loadout.FromJson(payload, _serializer);
+                await _io.WaitAsync();
+                try
+                {
+                    await _loadout.ReadFromAsync(payload, _serializer);
+                }
+                finally
+                {
+                    _io.Release();
+                }
                 _broker?.Publish(new ConfigLoadedMsg());
             }
             _log.Info("Imported config (not saved -- use Save to persist)");
@@ -407,40 +410,24 @@ internal sealed class ConfigManager : IDisposable
         }
     }
 
-    private void DeselectIncompatibleSabers()
-    {
-        if (Plugin.MultiPassEnabled) return;
-
-        bool incompatible =
-            (_loadout.Left.TryGetSaberAsset(out var leftCs) && leftCs?.OwnerEntry is not null && !leftCs.OwnerEntry.IsSPICompatible) ||
-            (_loadout.Right.TryGetSaberAsset(out var rightCs) && rightCs?.OwnerEntry is not null && !rightCs.OwnerEntry.IsSPICompatible);
-
-        if (incompatible)
-        {
-            _log.Info("Saved saber requires multi-pass rendering -- deselecting and using default saber.");
-            _loadout.Left.Pieces.Clear();
-            _loadout.Right.Pieces.Clear();
-        }
-    }
-
     private string GetFilePath(string name) => Path.Combine(_configDir, name + FileExtension);
 
     private static string SanitizeName(string name)
     {
         foreach (var c in Path.GetInvalidFileNameChars())
-            name = name.Replace(c, '_');
+        name = name.Replace(c, '_');
         return name.Trim();
     }
 
     private string GetEquippedSaberName()
     {
         if (_loadout.Left.TryGetSaberAsset(out var sa) && sa?.OwnerEntry is not null)
-            return sa.OwnerEntry.DisplayName;
+        return sa.OwnerEntry.DisplayName;
         return "(none)";
     }
 
     public void Dispose()
     {
-        StopWatching();
+        _watcher.Dispose();
     }
 }

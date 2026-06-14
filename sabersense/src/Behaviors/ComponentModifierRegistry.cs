@@ -2,10 +2,9 @@
 // Licensed under the SaberSense Proprietary License. See LICENSE file in the project root.
 
 using Newtonsoft.Json.Linq;
-using SaberSense.Catalog.Data;
 using SaberSense.Core.Logging;
+using SaberSense.Persistence;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 using UnityEngine;
 
 namespace SaberSense.Behaviors;
@@ -28,32 +27,73 @@ public sealed class ComponentModifierRegistry
         if (HasModifiers) DiscoverAll();
     }
 
-    public async Task FromJson(JObject obj, IJsonProvider jsonProvider)
+    public void ReadFrom(JObject obj, IJsonProvider jsonProvider)
     {
         if (!HasModifiers || obj is null || obj["hasBindings"]?.ToObject<bool>() != true)
-            return;
+        return;
 
-        var modsBlock = obj["bindings"];
-        if (modsBlock is null) return;
+        if (obj["bindings"] is not JObject modsBlock) return;
 
-        foreach (var (id, binding) in Bindings)
+        var consumed = new HashSet<string>();
+
+        foreach (var (key, binding) in BuildStableKeyMap())
         {
-            if (modsBlock[id.ToString()] is not JObject payload) continue;
-            await binding.FromJson(payload, jsonProvider);
+            if (modsBlock[key] is JObject payload)
+            {
+                binding.ReadFrom(payload, jsonProvider);
+                consumed.Add(key);
+            }
         }
+
+        foreach (var saved in modsBlock.Properties())
+        if (!consumed.Contains(saved.Name))
+        _log.Warn($"Saved modifier block '{saved.Name}' has no matching live binding -- discarding (bundle changed since this config was saved?)");
     }
 
-    public async Task<JToken> ToJson(IJsonProvider jsonProvider)
+    public JToken WriteTo(IJsonProvider jsonProvider)
     {
         if (!HasModifiers)
-            return new JObject { { "hasBindings", false } };
+        return new JObject { { "hasBindings", false } };
 
         var modsBlock = new JObject();
-        foreach (var (id, binding) in Bindings)
-            modsBlock.Add(id.ToString(), await binding.ToJson(jsonProvider));
+        foreach (var (key, binding) in BuildStableKeyMap())
+        modsBlock.Add(key, binding.WriteTo(jsonProvider));
 
         return new JObject { { "hasBindings", true }, { "bindings", modsBlock } };
     }
+
+    public JObject? ResolveSavedBlock(JObject? bindingsBlock, ModifierBinding binding)
+    {
+        if (bindingsBlock is null || binding is null) return null;
+
+        foreach (var (key, candidate) in BuildStableKeyMap())
+        {
+            if (!ReferenceEquals(candidate, binding)) continue;
+            return bindingsBlock[key] as JObject;
+        }
+        return null;
+    }
+
+    private IEnumerable<(string Key, ModifierBinding Binding)> BuildStableKeyMap()
+    {
+        var seen = new Dictionary<string, int>();
+        foreach (var binding in _bindings.Values)
+        {
+            var baseKey = StableKeyFor(binding);
+            if (seen.TryGetValue(baseKey, out var count))
+            {
+                seen[baseKey] = count + 1;
+                yield return ($"{baseKey}#{count}", binding);
+            }
+            else
+            {
+                seen[baseKey] = 1;
+                yield return (baseKey, binding);
+            }
+        }
+    }
+
+    private static string StableKeyFor(ModifierBinding binding) => $"{binding.Category}/{binding.Name}";
 
     private void DiscoverAll()
     {
@@ -63,14 +103,14 @@ public sealed class ComponentModifierRegistry
         {
             var binding = new VisibilityBinding(vis);
             if (!_bindings.TryAdd(binding.Id, binding))
-                _log.Warn($"Duplicate modifier ID {binding.Id} -- skipping");
+            _log.Warn($"Duplicate modifier ID {binding.Id} -- skipping");
         }
 
         foreach (var xfm in ModifierHost.TransformRules)
         {
             var binding = new SpatialBinding(xfm);
             if (!_bindings.TryAdd(binding.Id, binding))
-                _log.Warn($"Duplicate modifier ID {binding.Id} -- skipping");
+            _log.Warn($"Duplicate modifier ID {binding.Id} -- skipping");
         }
     }
 
@@ -88,7 +128,7 @@ public sealed class ComponentModifierRegistry
         }
 
         foreach (var (id, rule) in host.EnumerateAllRules())
-            if (_bindings.TryGetValue(id, out var b)) b.SetInstance(rule);
+        if (_bindings.TryGetValue(id, out var b)) b.SetInstance(rule);
     }
 
     public void SyncFrom(ComponentModifierRegistry source)
@@ -96,7 +136,7 @@ public sealed class ComponentModifierRegistry
         if (!HasModifiers) return;
 
         foreach (var peer in source.Bindings.Values)
-            if (Bindings.TryGetValue(peer.Id, out var local)) local.Sync(peer);
+        if (Bindings.TryGetValue(peer.Id, out var local)) local.Sync(peer);
     }
 
     public IReadOnlyCollection<ModifierBinding> AllBindings() => _bindings.Values;

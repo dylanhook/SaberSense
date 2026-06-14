@@ -10,7 +10,7 @@ namespace SaberSense.Core.Utilities;
 public readonly record struct PerfTimer(string Label, Stopwatch Sw, IModLogger? Logger = null) : IDisposable
 {
     public PerfTimer(string label = "Operation", IModLogger? logger = null)
-        : this(label, Stopwatch.StartNew(), logger) { }
+    : this(label, Stopwatch.StartNew(), logger) { }
 
     public void Print(IModLogger logger)
     {

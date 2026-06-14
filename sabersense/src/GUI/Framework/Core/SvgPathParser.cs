@@ -28,39 +28,39 @@ internal static class SvgPathParser
             switch (c)
             {
                 case 'M':
-                    {
-                        i++;
-                        if (current.Count is > 0)
-                            contours.Add(current);
-                        current = [];
-                        float x = ReadFloat(d, ref i);
-                        float y = ReadFloat(d, ref i);
-                        current.Add(new Vector2(x, y));
-                        break;
-                    }
+                {
+                    i++;
+                    if (current.Count is > 0)
+                    contours.Add(current);
+                    current = [];
+                    float x = ReadFloat(d, ref i);
+                    float y = ReadFloat(d, ref i);
+                    current.Add(new Vector2(x, y));
+                    break;
+                }
 
                 case 'L':
-                    {
-                        i++;
-                        float x = ReadFloat(d, ref i);
-                        float y = ReadFloat(d, ref i);
-                        current.Add(new Vector2(x, y));
-                        break;
-                    }
+                {
+                    i++;
+                    float x = ReadFloat(d, ref i);
+                    float y = ReadFloat(d, ref i);
+                    current.Add(new Vector2(x, y));
+                    break;
+                }
 
                 case 'Z':
                 case 'z':
-                    i++;
-                    break;
+                i++;
+                break;
 
                 default:
-                    i++;
-                    break;
+                i++;
+                break;
             }
         }
 
         if (current.Count is > 0)
-            contours.Add(current);
+        contours.Add(current);
 
         return contours;
     }
@@ -68,15 +68,15 @@ internal static class SvgPathParser
     private static float ReadFloat(string s, ref int i)
     {
         while (i < s.Length && (char.IsWhiteSpace(s[i]) || s[i] == ','))
-            i++;
+        i++;
 
         int start = i;
 
         if (i < s.Length && (s[i] == '-' || s[i] == '+'))
-            i++;
+        i++;
 
         while (i < s.Length && (char.IsDigit(s[i]) || s[i] == '.'))
-            i++;
+        i++;
 
         if (i == start) return 0f;
         return float.Parse(s[start..i], CultureInfo.InvariantCulture);

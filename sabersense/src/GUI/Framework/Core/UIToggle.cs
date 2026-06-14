@@ -114,6 +114,6 @@ public class UIToggle : UIElement
     private void SyncDependentVisibility()
     {
         foreach (var go in _dependentElements)
-            if (go != null) go.SetActive(_isOn);
+        if (go != null) go.SetActive(_isOn);
     }
 }

@@ -22,9 +22,9 @@ public class UIPropRow : UIElement
         layout.padding = new RectOffset(1, 1, 0, 0);
 
         Label = new UILabel("Label", label)
-            .SetFontSize(UITheme.FontNormal)
-            .SetColor(UITheme.TextSecondary)
-            .SetAlignment(TMPro.TextAlignmentOptions.Left);
+        .SetFontSize(UITheme.FontNormal)
+        .SetColor(UITheme.TextSecondary)
+        .SetAlignment(TMPro.TextAlignmentOptions.Left);
         Label.RectTransform.SetParent(RectTransform, false);
         Label.AddLayoutElement(flexibleWidth: 1);
 
@@ -34,9 +34,9 @@ public class UIPropRow : UIElement
         var controlLE = controlContainer.AddComponent<LayoutElement>();
 
         if (controlWidth > 0)
-            controlLE.preferredWidth = controlWidth;
+        controlLE.preferredWidth = controlWidth;
         else
-            controlLE.flexibleWidth = 1;
+        controlLE.flexibleWidth = 1;
 
         control.RectTransform.SetParent(ControlArea, false);
         control.SetAnchors(Vector2.zero, Vector2.one);

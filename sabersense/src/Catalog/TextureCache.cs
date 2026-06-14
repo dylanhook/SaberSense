@@ -2,10 +2,11 @@
 // Licensed under the SaberSense Proprietary License. See LICENSE file in the project root.
 
 using IPA.Utilities.Async;
+using SaberSense.App;
+using SaberSense.AssetPipeline.Assembly;
 using SaberSense.Core;
 using SaberSense.Core.Logging;
 using SaberSense.Core.Utilities;
-using SaberSense.Profiles;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -60,7 +61,7 @@ internal sealed class TextureCache : IAsyncLoadable, IDisposable
         foreach (var entry in _cache.Values)
         {
             if (entry.Texture != null && entry.Texture.name == textureName)
-                return entry.Texture;
+            return entry.Texture;
         }
         return null;
     }
@@ -74,7 +75,7 @@ internal sealed class TextureCache : IAsyncLoadable, IDisposable
         UnityMainThreadTaskScheduler.Factory.StartNew(() =>
         {
             foreach (var tex in snapshot)
-                tex.Dispose();
+            tex.Dispose();
         });
     }
 
@@ -114,7 +115,7 @@ internal sealed class TextureCache : IAsyncLoadable, IDisposable
             _fsw.Deleted += (_, e) => OnFileDeleted(e.FullPath);
             _fsw.Renamed += (_, e) => { OnFileDeleted(e.OldFullPath); OnFileCreated(e.FullPath); };
             _fsw.Error += (_, e) =>
-                _log.Warn($"Watcher error: {e.GetException().Message}");
+            _log.Warn($"Watcher error: {e.GetException().Message}");
         }
         catch (Exception ex)
         {
@@ -127,14 +128,21 @@ internal sealed class TextureCache : IAsyncLoadable, IDisposable
         if (_disposed) return;
         if (!IsImageFile(Path.GetExtension(fullPath))) return;
 
-        Task.Run(async () =>
+        ErrorBoundary.FireAndForget(
+        Task.Run(() => ProcessFileCreatedAsync(fullPath)), _log, nameof(OnFileCreated));
+    }
+
+    private async Task ProcessFileCreatedAsync(string fullPath)
+    {
+        await Task.Delay(DebounceMs);
+        if (_disposed || !File.Exists(fullPath)) return;
+
+        var relativePath = AssetPaths.MakeRelative(fullPath);
+        if (_cache.ContainsKey(relativePath)) return;
+
+        await _ioThrottle.WaitAsync();
+        try
         {
-            await Task.Delay(DebounceMs);
-            if (_disposed || !File.Exists(fullPath)) return;
-
-            var relativePath = AssetPaths.MakeRelative(fullPath);
-            if (_cache.ContainsKey(relativePath)) return;
-
             byte[] bytes;
             try { bytes = await FileIO.SlurpAsync(fullPath); }
             catch (IOException ex) { _log.Debug($"File read failed (may still be locked): {ex.Message}"); return; }
@@ -149,7 +157,7 @@ internal sealed class TextureCache : IAsyncLoadable, IDisposable
 
                 tex.name = relativePath;
                 var asset = new CachedTexture(
-                    Path.GetFileName(relativePath), relativePath, tex, AssetSource.FileSystem);
+                Path.GetFileName(relativePath), relativePath, tex, AssetSource.FileSystem);
 
                 if (!_cache.TryAdd(relativePath, asset))
                 {
@@ -159,7 +167,8 @@ internal sealed class TextureCache : IAsyncLoadable, IDisposable
 
                 OnCacheChanged?.Invoke();
             });
-        });
+        }
+        finally { _ioThrottle.Release(); }
     }
 
     private void OnFileDeleted(string fullPath)
@@ -216,8 +225,8 @@ internal sealed class TextureCache : IAsyncLoadable, IDisposable
     private async Task ExecutePopulationAsync()
     {
         var scanTasks = _texturesFolder.EnumerateFiles("*.*", SearchOption.AllDirectories)
-            .Where(f => IsImageFile(f.Extension))
-            .Select(f => ThrottledResolveAsync(AssetPaths.MakeRelative(f.FullName)));
+        .Where(f => IsImageFile(f.Extension))
+        .Select(f => ThrottledResolveAsync(AssetPaths.MakeRelative(f.FullName)));
 
         await Task.WhenAll(scanTasks);
     }

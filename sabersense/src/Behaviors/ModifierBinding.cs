@@ -2,8 +2,9 @@
 // Licensed under the SaberSense Proprietary License. See LICENSE file in the project root.
 
 using Newtonsoft.Json.Linq;
-using SaberSense.Catalog.Data;
-using System.Threading.Tasks;
+using SaberSense.Persistence;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace SaberSense.Behaviors;
 
@@ -25,10 +26,14 @@ public abstract class ModifierBinding
 
     public virtual void Tick() { }
 
-    public abstract Task FromJson(JObject obj, IJsonProvider jsonProvider);
-    public abstract Task<JToken> ToJson(IJsonProvider jsonProvider);
+    public abstract void ReadFrom(JObject obj, IJsonProvider jsonProvider);
+
+    public abstract JToken WriteTo(IJsonProvider jsonProvider);
 
     public abstract void Update();
 
     public abstract void Sync(object otherMod);
+
+    public virtual IEnumerable<ModifierParam> DescribeEditor(JObject? modJson, IJsonProvider jsonProvider) =>
+    Enumerable.Empty<ModifierParam>();
 }

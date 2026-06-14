@@ -19,9 +19,9 @@ internal sealed class SaberSenseMenuButton : IInitializable, IDisposable
 
     private readonly HMUI.HierarchyManager _hierarchyManager;
     private readonly PhysicsRaycasterWithCache _physicsRaycaster;
-    private readonly SaberCatalog _mainAssetStore;
+    private readonly SaberCatalog _catalog;
     private readonly DiContainer _container;
-    private readonly SaberSense.Configuration.ModSettings _pluginConfig;
+    private readonly SaberSense.Configuration.ModSettings _settings;
     private readonly IModLogger _log;
     private BeatSaberMarkupLanguage.MenuButtons.MenuButton? _menuButton;
     private GameObject? _menuViewInstance;
@@ -29,24 +29,24 @@ internal sealed class SaberSenseMenuButton : IInitializable, IDisposable
     private readonly List<GameObject> _deactivatedScreens = [];
 
     public SaberSenseMenuButton(
-        HMUI.HierarchyManager hierarchyManager,
-        PhysicsRaycasterWithCache physicsRaycaster,
-        SaberCatalog mainAssetStore,
-        SaberSense.Configuration.ModSettings config,
-        DiContainer container,
-        IModLogger log)
+    HMUI.HierarchyManager hierarchyManager,
+    PhysicsRaycasterWithCache physicsRaycaster,
+    SaberCatalog catalog,
+    SaberSense.Configuration.ModSettings settings,
+    DiContainer container,
+    IModLogger log)
     {
         _hierarchyManager = hierarchyManager;
         _physicsRaycaster = physicsRaycaster;
-        _mainAssetStore = mainAssetStore;
-        _pluginConfig = config;
+        _catalog = catalog;
+        _settings = settings;
         _container = container;
         _log = log.ForSource(nameof(SaberSenseMenuButton));
     }
 
     public void Initialize()
     {
-        SaberSense.Core.Patches.SabersTabPatch.TabSlot = _pluginConfig.ShowGameplayButton ? 4 : null;
+        SaberSense.Patches.SabersTabPatch.TabSlot = _settings.ShowGameplayButton ? 4 : null;
         _menuButton = new BeatSaberMarkupLanguage.MenuButtons.MenuButton("SaberSense", "Get Good, Get SaberSense", ShowMenu);
         BeatSaberMarkupLanguage.MenuButtons.MenuButtons.Instance.RegisterButton(_menuButton);
     }
@@ -55,11 +55,11 @@ internal sealed class SaberSenseMenuButton : IInitializable, IDisposable
     {
         try
         {
-            if (Core.Patches.HarmonyBridge.MenuButton == this)
-                Core.Patches.HarmonyBridge.MenuButton = null;
-            Core.Patches.SabersTabPatch.TabSlot = null;
+            if (Patches.HarmonyBridge.MenuButton == this)
+            Patches.HarmonyBridge.MenuButton = null;
+            Patches.SabersTabPatch.TabSlot = null;
             if (_menuButton is not null)
-                BeatSaberMarkupLanguage.MenuButtons.MenuButtons.Instance.UnregisterButton(_menuButton);
+            BeatSaberMarkupLanguage.MenuButtons.MenuButtons.Instance.UnregisterButton(_menuButton);
         }
         catch (System.Exception ex)
         {
@@ -88,8 +88,8 @@ internal sealed class SaberSenseMenuButton : IInitializable, IDisposable
         hostTransform.localPosition = MenuWorldPosition;
         hostTransform.localScale = MenuWorldScale;
 
-        var menuView = _menuViewInstance.AddComponent<SaberSense.GUI.Framework.Menu.SaberSenseMenuView>();
-        menuView.Init(_physicsRaycaster, _mainAssetStore);
+        var menuView = _menuViewInstance.AddComponent<SaberSense.GUI.Menu.SaberSenseMenuView>();
+        menuView.Init(_physicsRaycaster, _catalog);
         _container.Inject(menuView);
         menuView.OnCloseRequested = Close;
     }

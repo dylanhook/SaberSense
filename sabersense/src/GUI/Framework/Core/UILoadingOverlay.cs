@@ -15,7 +15,6 @@ internal sealed class UILoadingOverlay : UIElement
     private const float BgInset = 0.4f;
     private const float BarHeight = 0.6f;
     private const float BarPad = 1f;
-    private const int SortOrder = 110;
 
     private readonly RectTransform _canvasRoot;
     private readonly UIImage _backdrop;
@@ -31,9 +30,9 @@ internal sealed class UILoadingOverlay : UIElement
         _canvasRoot = canvasRoot;
 
         _backdrop = new UIImage("LoadingBackdrop")
-            .SetColor(new Color(0, 0, 0, BackdropAlpha));
+        .SetColor(new Color(0, 0, 0, BackdropAlpha));
         _backdrop.ImageComponent.raycastTarget = true;
-        UIPopupHelper.SetupPopupCanvas(_backdrop.GameObject, _canvasRoot, SortOrder);
+        UIPopupHelper.SetupPopupCanvas(_backdrop.GameObject, _canvasRoot, UIZLayer.LoadingOverlay);
 
         var panel = new GameObject("LoadingPanel");
         panel.transform.SetParent(_backdrop.RectTransform, false);
@@ -45,8 +44,8 @@ internal sealed class UILoadingOverlay : UIElement
 
         const string title = "Loading";
         var titleLabel = new UILabel("LoadingTitle", title)
-            .SetFontSize(UITheme.FontSmall)
-            .SetColor(UITheme.TextLabel);
+        .SetFontSize(UITheme.FontSmall)
+        .SetColor(UITheme.TextLabel);
         titleLabel.TextComponent.fontStyle = TMPro.FontStyles.Bold;
         titleLabel.TextComponent.alignment = TMPro.TextAlignmentOptions.Left;
         titleLabel.RectTransform.SetParent(panelRect.transform, false);
@@ -72,9 +71,9 @@ internal sealed class UILoadingOverlay : UIElement
         titleLabel.RectTransform.SetAsLastSibling();
 
         _phaseLabel = new UILabel("PhaseLabel", "Preparing...")
-            .SetFontSize(UITheme.FontNormal)
-            .SetColor(UITheme.TextPrimary)
-            .SetAlignment(TMPro.TextAlignmentOptions.Left);
+        .SetFontSize(UITheme.FontNormal)
+        .SetColor(UITheme.TextPrimary)
+        .SetAlignment(TMPro.TextAlignmentOptions.Left);
         _phaseLabel.RectTransform.SetParent(bg.RectTransform, false);
         _phaseLabel.SetAnchors(Vector2.zero, Vector2.one);
         _phaseLabel.RectTransform.offsetMin = new Vector2(2f, BarHeight + BarPad + 0.5f);

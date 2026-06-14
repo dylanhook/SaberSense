@@ -25,7 +25,6 @@ public class UIVirtualKeyboard : UIElement
     private const float BackdropAlpha = 0.6f;
     private const float ToggleKeyWidth = 6f;
     private const float DoneKeyWidth = 8f;
-    private const int PopupSortOrder = 200;
 
     private const string BackspaceSymbol = "\u232B";
     private const string SpaceLabel = "Space";
@@ -62,12 +61,12 @@ public class UIVirtualKeyboard : UIElement
         _canvasRoot = canvasRoot;
 
         _backdrop = new UIImage("KBBackdrop")
-            .SetColor(new Color(0, 0, 0, BackdropAlpha));
+        .SetColor(new Color(0, 0, 0, BackdropAlpha));
         _backdrop.ImageComponent.raycastTarget = true;
         _backdrop.AddComponent<PointerEventHandler>().OnClick = Hide;
 
         _panel = new UIImage("KBPanel")
-            .SetColor(UITheme.Border);
+        .SetColor(UITheme.Border);
         _panel.RectTransform.SetParent(_backdrop.RectTransform, false);
         _panel.RectTransform.anchorMin = new Vector2(0.5f, 0.5f);
         _panel.RectTransform.anchorMax = new Vector2(0.5f, 0.5f);
@@ -77,7 +76,7 @@ public class UIVirtualKeyboard : UIElement
         _panel.AddComponent<PointerEventHandler>();
 
         var innerBorder = new UIImage("KBInner")
-            .SetColor(UITheme.Divider);
+        .SetColor(UITheme.Divider);
         innerBorder.RectTransform.SetParent(_panel.RectTransform, false);
         innerBorder.SetAnchors(Vector2.zero, Vector2.one);
         innerBorder.RectTransform.offsetMin = new Vector2(BorderInset, BorderInset);
@@ -85,7 +84,7 @@ public class UIVirtualKeyboard : UIElement
         innerBorder.ImageComponent.raycastTarget = false;
 
         var bg = new UIImage("KBBg")
-            .SetColor(UITheme.Surface);
+        .SetColor(UITheme.Surface);
         bg.RectTransform.SetParent(innerBorder.RectTransform, false);
         bg.SetAnchors(Vector2.zero, Vector2.one);
         bg.RectTransform.offsetMin = new Vector2(BorderInset, BorderInset);
@@ -98,8 +97,8 @@ public class UIVirtualKeyboard : UIElement
         mainLayout.RectTransform.sizeDelta = Vector2.zero;
         UnityEngine.Object.Destroy(mainLayout.GameObject.GetComponent<ContentSizeFitter>());
         mainLayout.SetSpacing(KeyRowSpacing).SetPadding(
-            (int)LayoutPadding, (int)LayoutPadding,
-            (int)LayoutPadding, (int)LayoutPadding);
+        (int)LayoutPadding, (int)LayoutPadding,
+        (int)LayoutPadding, (int)LayoutPadding);
 
         _lettersGO = BuildKeyGrid("Letters", LetterRows, mainLayout.RectTransform);
 
@@ -110,7 +109,7 @@ public class UIVirtualKeyboard : UIElement
 
         _backdrop.GameObject.SetActive(false);
 
-        UIPopupHelper.SetupPopupCanvas(_backdrop.GameObject, _canvasRoot, PopupSortOrder);
+        UIPopupHelper.SetupPopupCanvas(_backdrop.GameObject, _canvasRoot, UIZLayer.Keyboard);
     }
 
     public void Show()
@@ -120,7 +119,7 @@ public class UIVirtualKeyboard : UIElement
         _numbersGO.SetActive(false);
 
         foreach (var handler in _backdrop.GameObject.GetComponentsInChildren<PointerEventHandler>(true))
-            handler.OnExit?.Invoke();
+        handler.OnExit?.Invoke();
 
         _backdrop.RectTransform.SetParent(_canvasRoot, false);
         _backdrop.SetAnchors(Vector2.zero, Vector2.one);
@@ -156,7 +155,7 @@ public class UIVirtualKeyboard : UIElement
         go.AddComponent<LayoutElement>().flexibleHeight = 1;
 
         foreach (var row in rows)
-            BuildKeyRow(row, go.transform);
+        BuildKeyRow(row, go.transform);
 
         return go;
     }
@@ -221,7 +220,7 @@ public class UIVirtualKeyboard : UIElement
         var btn = new BaseButton(label, showAccent: false);
         btn.Label.SetFontSize(UITheme.FontSmall);
         if (preferredWidth > 0)
-            btn.AddLayoutElement(preferredWidth: preferredWidth, preferredHeight: KeyRowHeight);
+        btn.AddLayoutElement(preferredWidth: preferredWidth, preferredHeight: KeyRowHeight);
         return btn;
     }
 

@@ -1,6 +1,7 @@
 // Copyright (c) 2026 dylanhook. All rights reserved.
 // Licensed under the SaberSense Proprietary License. See LICENSE file in the project root.
 
+using SaberSense.Input;
 using System;
 using UnityEngine;
 using UnityEngine.UI;
@@ -9,12 +10,7 @@ namespace SaberSense.GUI.Framework.Core;
 
 internal sealed class UIKeybindButton : UIElement
 {
-    private static readonly string[] ButtonNames =
-    {
-        "None", "L-Trigger", "R-Trigger", "L-Grip", "R-Grip",
-        "L-Primary", "R-Primary", "L-Secondary", "R-Secondary",
-        "L-Stick Click", "R-Stick Click"
-    };
+    private static readonly int MaxBindingIndex = (int)VrButtonBinding.RightStick;
 
     private readonly UILabel _label;
 
@@ -26,9 +22,9 @@ internal sealed class UIKeybindButton : UIElement
     public UIKeybindButton(string name = "KeybindButton") : base(name)
     {
         _label = new UILabel("Text", "[None]")
-            .SetFontSize(UITheme.FontSmall)
-            .SetColor(UITheme.TextKeybind)
-            .SetAlignment(TMPro.TextAlignmentOptions.Right);
+        .SetFontSize(UITheme.FontSmall)
+        .SetColor(UITheme.TextKeybind)
+        .SetAlignment(TMPro.TextAlignmentOptions.Right);
         _label.RectTransform.SetParent(RectTransform, false);
         _label.SetAnchors(Vector2.zero, Vector2.one);
         _label.TextComponent.raycastTarget = false;
@@ -42,11 +38,11 @@ internal sealed class UIKeybindButton : UIElement
     }
 
     public static string GetButtonName(int index)
-        => index >= 0 && index < ButtonNames.Length ? ButtonNames[index] : "None";
+    => VrButtonBindings.DisplayName((VrButtonBinding)index);
 
     public UIKeybindButton SetValue(int index)
     {
-        _currentIndex = Mathf.Clamp(index, 0, ButtonNames.Length - 1);
+        _currentIndex = Mathf.Clamp(index, 0, MaxBindingIndex);
         UpdateLabel();
         return this;
     }
@@ -60,9 +56,9 @@ internal sealed class UIKeybindButton : UIElement
     private void HandleClick()
     {
         if (_listening)
-            CancelListening();
+        CancelListening();
         else
-            StartListening();
+        StartListening();
     }
 
     private void StartListening()

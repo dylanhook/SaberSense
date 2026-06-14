@@ -24,7 +24,7 @@ public static class UIMaterials
             if (_noBloomMaterial == null)
             {
                 var found = Resources.FindObjectsOfTypeAll<Material>()
-                    .FirstOrDefault(m => m.name == "UINoGlow");
+                .FirstOrDefault(m => m.name == "UINoGlow");
 
                 _noBloomMaterial = found != null ? new Material(found) : CreateNoGlowMaterial();
                 _noBloomMaterial.name = "SS_UINoGlow";

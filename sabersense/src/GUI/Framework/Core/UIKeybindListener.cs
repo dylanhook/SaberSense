@@ -1,6 +1,7 @@
 // Copyright (c) 2026 dylanhook. All rights reserved.
 // Licensed under the SaberSense Proprietary License. See LICENSE file in the project root.
 
+using SaberSense.Input;
 using System;
 using UnityEngine;
 using UnityEngine.XR;
@@ -20,7 +21,7 @@ internal sealed class UIKeybindListener : MonoBehaviour
     {
         if (_captured) return;
 
-        if (Input.GetKeyDown(KeyCode.Escape))
+        if (UnityEngine.Input.GetKeyDown(KeyCode.Escape))
         {
             Finish(0);
             return;
@@ -32,46 +33,43 @@ internal sealed class UIKeybindListener : MonoBehaviour
         if (!_armed)
         {
             if (!AnyButtonHeld(leftDevice, rightDevice))
-                _armed = true;
+            _armed = true;
             return;
         }
 
-        if (TryCapture(leftDevice, CommonUsages.triggerButton, 1)) return;
-        if (TryCapture(rightDevice, CommonUsages.triggerButton, 2)) return;
-
-        if (TryCapture(leftDevice, CommonUsages.gripButton, 3)) return;
-        if (TryCapture(rightDevice, CommonUsages.gripButton, 4)) return;
-
-        if (TryCapture(leftDevice, CommonUsages.primaryButton, 5)) return;
-        if (TryCapture(rightDevice, CommonUsages.primaryButton, 6)) return;
-
-        if (TryCapture(leftDevice, CommonUsages.secondaryButton, 7)) return;
-        if (TryCapture(rightDevice, CommonUsages.secondaryButton, 8)) return;
-
-        if (TryCapture(leftDevice, CommonUsages.primary2DAxisClick, 9)) return;
-        if (TryCapture(rightDevice, CommonUsages.primary2DAxisClick, 10)) return;
+        foreach (var binding in VrButtonBindings.Pressable)
+        {
+            var descriptor = VrButtonBindings.Get(binding);
+            if (TryCapture(DeviceFor(descriptor.Node, leftDevice, rightDevice), descriptor.Usage, binding))
+            return;
+        }
     }
 
     private static bool AnyButtonHeld(InputDevice left, InputDevice right)
     {
-        return IsHeld(left, CommonUsages.triggerButton) || IsHeld(right, CommonUsages.triggerButton)
-            || IsHeld(left, CommonUsages.gripButton) || IsHeld(right, CommonUsages.gripButton)
-            || IsHeld(left, CommonUsages.primaryButton) || IsHeld(right, CommonUsages.primaryButton)
-            || IsHeld(left, CommonUsages.secondaryButton) || IsHeld(right, CommonUsages.secondaryButton)
-            || IsHeld(left, CommonUsages.primary2DAxisClick) || IsHeld(right, CommonUsages.primary2DAxisClick);
+        foreach (var binding in VrButtonBindings.Pressable)
+        {
+            var descriptor = VrButtonBindings.Get(binding);
+            if (IsHeld(DeviceFor(descriptor.Node, left, right), descriptor.Usage))
+            return true;
+        }
+        return false;
     }
+
+    private static InputDevice DeviceFor(XRNode node, InputDevice left, InputDevice right)
+    => node == XRNode.LeftHand ? left : right;
 
     private static bool IsHeld(InputDevice device, InputFeatureUsage<bool> usage)
     {
         return device.isValid && device.TryGetFeatureValue(usage, out bool v) && v;
     }
 
-    private bool TryCapture(InputDevice device, InputFeatureUsage<bool> usage, int bindingIndex)
+    private bool TryCapture(InputDevice device, InputFeatureUsage<bool> usage, VrButtonBinding binding)
     {
         if (!device.isValid) return false;
         if (device.TryGetFeatureValue(usage, out bool pressed) && pressed)
         {
-            Finish(bindingIndex);
+            Finish((int)binding);
             return true;
         }
         return false;
@@ -81,9 +79,9 @@ internal sealed class UIKeybindListener : MonoBehaviour
     {
         _captured = true;
         if (index > 0)
-            OnCaptured?.Invoke(index);
+        OnCaptured?.Invoke(index);
         else
-            OnCancelled?.Invoke();
+        OnCancelled?.Invoke();
         Destroy(this);
     }
 

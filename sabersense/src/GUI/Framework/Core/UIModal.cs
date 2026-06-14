@@ -16,7 +16,6 @@ public class UIModal : UIElement
     private const float TitleHeight = 6f;
     private const float DividerHeight = 0.3f;
     private const float ButtonHeight = 4.5f;
-    private const int PopupSortOrder = 100;
 
     public UIImage Backdrop { get; }
 
@@ -39,7 +38,7 @@ public class UIModal : UIElement
         _canvasRoot = canvasRoot;
 
         Backdrop = new UIImage("Backdrop")
-            .SetColor(new Color(0, 0, 0, BackdropAlpha));
+        .SetColor(new Color(0, 0, 0, BackdropAlpha));
         Backdrop.ImageComponent.raycastTarget = true;
 
         Panel = new UIImage("Panel").SetColor(UITheme.Border);
@@ -66,14 +65,14 @@ public class UIModal : UIElement
         panelLayout.padding = new RectOffset(LayoutPadding, LayoutPadding, LayoutPadding, LayoutPadding);
 
         TitleLabel = new UILabel("Title", title)
-            .SetFontSize(UITheme.FontLarge)
-            .SetColor(UITheme.TextPrimary)
-            .SetAlignment(TMPro.TextAlignmentOptions.Left);
+        .SetFontSize(UITheme.FontLarge)
+        .SetColor(UITheme.TextPrimary)
+        .SetAlignment(TMPro.TextAlignmentOptions.Left);
         TitleLabel.RectTransform.SetParent(PanelBg.RectTransform, false);
         TitleLabel.AddLayoutElement(preferredHeight: TitleHeight);
 
         var div = new UIImage("Div")
-            .SetColor(UITheme.Divider);
+        .SetColor(UITheme.Divider);
         div.RectTransform.SetParent(PanelBg.RectTransform, false);
         div.AddLayoutElement(preferredHeight: DividerHeight);
 
@@ -88,7 +87,7 @@ public class UIModal : UIElement
     public void Show()
     {
         foreach (var handler in Backdrop.GameObject.GetComponentsInChildren<PointerEventHandler>(true))
-            handler.OnExit?.Invoke();
+        handler.OnExit?.Invoke();
 
         Backdrop.RectTransform.SetParent(_canvasRoot, false);
         Backdrop.SetAnchors(Vector2.zero, Vector2.one);
@@ -110,7 +109,7 @@ public class UIModal : UIElement
     public UIModal AddButtons(string confirmText, Action onConfirm, string cancelText = "Cancel", Action? onCancel = null)
     {
         ButtonsDivider = new UIImage("BtnDiv")
-            .SetColor(UITheme.Divider);
+        .SetColor(UITheme.Divider);
         ButtonsDivider.RectTransform.SetParent(PanelBg.RectTransform, false);
         ButtonsDivider.AddLayoutElement(preferredHeight: DividerHeight);
 

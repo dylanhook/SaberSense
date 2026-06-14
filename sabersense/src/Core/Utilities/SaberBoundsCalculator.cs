@@ -8,11 +8,11 @@ namespace SaberSense.Core.Utilities;
 internal static class SaberBoundsCalculator
 {
     public static (float minZ, float maxZ)? ComputeZBounds(
-        (float minZ, float maxZ)? parsedBounds,
-        GameObject prefab)
+    (float minZ, float maxZ)? parsedBounds,
+    GameObject prefab)
     {
         if (parsedBounds is { } p)
-            return (p.minZ, p.maxZ);
+        return (p.minZ, p.maxZ);
 
         if (prefab == null) return null;
 
@@ -30,17 +30,17 @@ internal static class SaberBoundsCalculator
             var bMin = b.min;
             var bMax = b.max;
             for (int cx = 0; cx < 2; cx++)
-                for (int cy = 0; cy < 2; cy++)
-                    for (int cz = 0; cz < 2; cz++)
-                    {
-                        var worldPt = new Vector3(
-                            cx == 0 ? bMin.x : bMax.x,
-                            cy == 0 ? bMin.y : bMax.y,
-                            cz == 0 ? bMin.z : bMax.z);
-                        var localPt = rootInv.MultiplyPoint3x4(worldPt);
-                        if (localPt.z < minZ) minZ = localPt.z;
-                        if (localPt.z > maxZ) maxZ = localPt.z;
-                    }
+            for (int cy = 0; cy < 2; cy++)
+            for (int cz = 0; cz < 2; cz++)
+            {
+                var worldPt = new Vector3(
+                cx == 0 ? bMin.x : bMax.x,
+                cy == 0 ? bMin.y : bMax.y,
+                cz == 0 ? bMin.z : bMax.z);
+                var localPt = rootInv.MultiplyPoint3x4(worldPt);
+                if (localPt.z < minZ) minZ = localPt.z;
+                if (localPt.z > maxZ) maxZ = localPt.z;
+            }
         }
 
         return minZ < maxZ ? (minZ, maxZ) : null;

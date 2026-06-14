@@ -40,7 +40,7 @@ public class UIListCell : UIElement
         layout.padding = new RectOffset(1, 1, 1, 1);
 
         Background = new UIImage("Bg")
-            .SetColor(UITheme.Surface);
+        .SetColor(UITheme.Surface);
         Background.RectTransform.SetParent(RectTransform, false);
         Background.SetAnchors(Vector2.zero, Vector2.one);
         Background.ImageComponent.raycastTarget = true;
@@ -57,7 +57,7 @@ public class UIListCell : UIElement
         if (data.Icon != null)
         {
             Icon = new UIImage("Icon")
-                .SetSprite(data.Icon);
+            .SetSprite(data.Icon);
             Icon.RectTransform.SetParent(iconRect, false);
             Icon.SetAnchors(Vector2.zero, Vector2.one);
             Icon.RectTransform.offsetMin = new Vector2(0.5f, 0.5f);
@@ -69,7 +69,7 @@ public class UIListCell : UIElement
         else
         {
             Icon = new UIImage("Icon")
-                .SetSprite(null);
+            .SetSprite(null);
             Icon.RectTransform.SetParent(iconRect, false);
             Icon.SetAnchors(Vector2.zero, Vector2.one);
             Icon.RectTransform.offsetMin = new Vector2(0.5f, 0.5f);
@@ -119,11 +119,11 @@ public class UIListCell : UIElement
             tcLayout.childAlignment = TextAnchor.MiddleCenter;
 
             new UILabel("M", "MISSING").SetFontSize(2.5f).SetColor(UITheme.TextMuted)
-                .SetAlignment(TMPro.TextAlignmentOptions.Center)
-                .SetParent(tcRect).AddLayoutElement(preferredHeight: UITheme.LabelHeight);
+            .SetAlignment(TMPro.TextAlignmentOptions.Center)
+            .SetParent(tcRect).AddLayoutElement(preferredHeight: UITheme.LabelHeight);
             new UILabel("C", "COVER").SetFontSize(2.5f).SetColor(UITheme.TextMuted)
-                .SetAlignment(TMPro.TextAlignmentOptions.Center)
-                .SetParent(tcRect).AddLayoutElement(preferredHeight: UITheme.LabelHeight);
+            .SetAlignment(TMPro.TextAlignmentOptions.Center)
+            .SetParent(tcRect).AddLayoutElement(preferredHeight: UITheme.LabelHeight);
 
             _placeholderGO.SetActive(data.Icon == null);
         }
@@ -138,22 +138,22 @@ public class UIListCell : UIElement
         textCol.AddComponent<LayoutElement>().flexibleWidth = 1;
 
         Title = new UILabel("Title", data.Title)
-            .SetFontSize(UITheme.FontNormal)
-            .SetColor(UITheme.TextPrimary)
-            .SetAlignment(TMPro.TextAlignmentOptions.Left);
+        .SetFontSize(UITheme.FontNormal)
+        .SetColor(UITheme.TextPrimary)
+        .SetAlignment(TMPro.TextAlignmentOptions.Left);
         Title.RectTransform.SetParent(textCol.transform, false);
         Title.AddLayoutElement(flexibleWidth: 1, preferredHeight: UITheme.ButtonRowHeight);
 
         Subtitle = new UILabel("Sub", data.Subtitle ?? "")
-            .SetFontSize(UITheme.FontSmall)
-            .SetColor(UITheme.TextSecondary)
-            .SetAlignment(TMPro.TextAlignmentOptions.Left);
+        .SetFontSize(UITheme.FontSmall)
+        .SetColor(UITheme.TextSecondary)
+        .SetAlignment(TMPro.TextAlignmentOptions.Left);
         Subtitle.RectTransform.SetParent(textCol.transform, false);
         Subtitle.AddLayoutElement(flexibleWidth: 1, preferredHeight: UITheme.SectionLabelHeight);
         Subtitle.GameObject.SetActive(!string.IsNullOrEmpty(data.Subtitle));
 
         if (_heartSprite == null)
-            _heartSprite = VectorSpriteGenerator.Generate(IconPaths.Heart, 64);
+        _heartSprite = VectorSpriteGenerator.Generate(IconPaths.Heart, 64);
 
         _heartContainer = new GameObject("FavIconContainer");
         _heartContainer.transform.SetParent(RectTransform, false);
@@ -176,7 +176,7 @@ public class UIListCell : UIElement
         _heartContainer.SetActive(data.IsPinned);
 
         var accentBar = new UIImage("SelectBar")
-            .SetColor(Color.clear);
+        .SetColor(Color.clear);
         accentBar.RectTransform.SetParent(RectTransform, false);
         accentBar.RectTransform.anchorMin = Vector2.zero;
         accentBar.RectTransform.anchorMax = new Vector2(0, 1);
@@ -208,13 +208,13 @@ public class UIListCell : UIElement
         _isSelected = selected;
         Background.SetColor(selected ? UITheme.SurfaceHover : UITheme.Surface);
         if (_accentImage != null)
-            _accentImage.color = selected ? UITheme.Accent : Color.clear;
+        _accentImage.color = selected ? UITheme.Accent : Color.clear;
     }
 
     protected void AnimateBg(Color target)
     {
         if (_bgTween != null && _eventHandler != null)
-            _eventHandler.StopCoroutine(_bgTween);
+        _eventHandler.StopCoroutine(_bgTween);
         _bgTween = UITweener.FadeColor(_eventHandler!, Background.ImageComponent, target, UITheme.AnimFast);
     }
 
@@ -270,9 +270,9 @@ public class UISimpleCell : UIListCell
         layout.padding = new RectOffset(2, 1, 0, 0);
 
         Title = new UILabel("Title", data.Title)
-            .SetFontSize(UITheme.FontSmall)
-            .SetColor(UITheme.ListboxText)
-            .SetAlignment(TMPro.TextAlignmentOptions.Left);
+        .SetFontSize(UITheme.FontSmall)
+        .SetColor(UITheme.ListboxText)
+        .SetAlignment(TMPro.TextAlignmentOptions.Left);
         Title.RectTransform.SetParent(RectTransform, false);
         Title.AddLayoutElement(flexibleWidth: 1);
 

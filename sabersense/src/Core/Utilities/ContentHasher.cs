@@ -5,20 +5,11 @@ using SaberSense.Core.Logging;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace SaberSense.Core.Utilities;
 
 internal static class ContentHasher
 {
-    public static async Task<string> ComputeAsync(string path)
-    {
-        using var stream = File.OpenRead(path);
-        using var sha = SHA256.Create();
-        var hash = await Task.Run(() => sha.ComputeHash(stream));
-        return BytesToHex(hash);
-    }
-
     public static string Compute(string path)
     {
         using var stream = File.OpenRead(path);
@@ -44,7 +35,7 @@ internal static class ContentHasher
     {
         var sb = new StringBuilder(bytes.Length * 2);
         foreach (var b in bytes)
-            sb.Append(b.ToString("x2"));
+        sb.Append(b.ToString("x2"));
         return sb.ToString();
     }
 }

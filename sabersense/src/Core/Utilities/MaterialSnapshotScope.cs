@@ -14,7 +14,7 @@ internal readonly struct MaterialSnapshotScope
     {
         _preLoadIds = [];
         foreach (var m in Resources.FindObjectsOfTypeAll<Material>())
-            _preLoadIds.Add(m.GetInstanceID());
+        _preLoadIds.Add(m.GetInstanceID());
     }
 
     public List<Material> GetNewMaterials()
@@ -23,7 +23,7 @@ internal readonly struct MaterialSnapshotScope
         foreach (var m in Resources.FindObjectsOfTypeAll<Material>())
         {
             if (m != null && !_preLoadIds.Contains(m.GetInstanceID()))
-                result.Add(m);
+            result.Add(m);
         }
         return result;
     }

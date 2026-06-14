@@ -60,10 +60,10 @@ internal sealed class SpringBoneCollider : MonoBehaviour
         var delta = pos - center;
         float distSq = delta.sqrMagnitude;
         bool shouldResolve = pushOutside
-            ? (distSq > 0f && distSq < combinedSq)
-            : (distSq > combinedSq);
+        ? (distSq > 0f && distSq < combinedSq)
+        : (distSq > combinedSq);
         if (shouldResolve)
-            pos = center + delta * (combined / Mathf.Sqrt(distSq));
+        pos = center + delta * (combined / Mathf.Sqrt(distSq));
     }
 
     private static void ResolveCapsule(ref Vector3 pos, float pRadius, Vector3 endA, Vector3 endB, float cRadius, bool pushOutside)
@@ -91,10 +91,10 @@ internal sealed class SpringBoneCollider : MonoBehaviour
                 var perpendicular = toPos - axis * t;
                 float perpSq = perpendicular.sqrMagnitude;
                 bool shouldResolve = pushOutside
-                    ? (perpSq > 0f && perpSq < combinedSq)
-                    : (perpSq > combinedSq);
+                ? (perpSq > 0f && perpSq < combinedSq)
+                : (perpSq > combinedSq);
                 if (shouldResolve)
-                    pos += perpendicular * ((combined - Mathf.Sqrt(perpSq)) / Mathf.Sqrt(perpSq));
+                pos += perpendicular * ((combined - Mathf.Sqrt(perpSq)) / Mathf.Sqrt(perpSq));
             }
         }
     }
@@ -103,9 +103,9 @@ internal sealed class SpringBoneCollider : MonoBehaviour
     {
         float distSq = delta.sqrMagnitude;
         bool shouldResolve = pushOutside
-            ? (distSq > 0f && distSq < combinedSq)
-            : (distSq > combinedSq);
+        ? (distSq > 0f && distSq < combinedSq)
+        : (distSq > combinedSq);
         if (shouldResolve)
-            pos = center + delta * (combined / Mathf.Sqrt(distSq));
+        pos = center + delta * (combined / Mathf.Sqrt(distSq));
     }
 }

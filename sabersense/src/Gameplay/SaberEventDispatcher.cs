@@ -42,7 +42,7 @@ internal readonly struct ResolvedCall
         };
 
         if (target is GameObject go && method.Name == "SetActive" && args.Length is 1 && args[0] is bool boolVal)
-            _compiled = () => go.SetActive(boolVal);
+        _compiled = () => go.SetActive(boolVal);
     }
 
     public void Invoke()
@@ -155,13 +155,13 @@ internal sealed class SaberEventDispatcher : MonoBehaviour
         foreach (var filter in _comboFilters)
         {
             if (combo == filter.ComboTarget)
-                foreach (var call in filter.Calls) call.Invoke();
+            foreach (var call in filter.Calls) call.Invoke();
         }
 
         foreach (var filter in _nthComboFilters)
         {
             if (filter.ComboStep > 0 && combo % filter.ComboStep == 0 && combo != 0)
-                foreach (var call in filter.Calls) call.Invoke();
+            foreach (var call in filter.Calls) call.Invoke();
         }
     }
 
@@ -175,13 +175,13 @@ internal sealed class SaberEventDispatcher : MonoBehaviour
             float target = filter.Target;
 
             if ((prev > target && accuracy < target) || (prev < target && accuracy > target))
-                foreach (var call in filter.OnReachTarget) call.Invoke();
+            foreach (var call in filter.OnReachTarget) call.Invoke();
 
             if (prev < target && accuracy > target)
-                foreach (var call in filter.OnHigherThanTarget) call.Invoke();
+            foreach (var call in filter.OnHigherThanTarget) call.Invoke();
 
             if (prev > target && accuracy < target)
-                foreach (var call in filter.OnLowerThanTarget) call.Invoke();
+            foreach (var call in filter.OnLowerThanTarget) call.Invoke();
 
             filter.PreviousAccuracy = accuracy;
         }

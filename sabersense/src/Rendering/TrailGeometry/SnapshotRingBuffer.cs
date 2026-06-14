@@ -23,7 +23,6 @@ internal sealed class SnapshotRingBuffer
 
     public int Capacity { get; }
     public int Count => _count;
-    public float TotalDistance => _totalDistance;
 
     public SnapshotRingBuffer(int capacity)
     {
@@ -35,7 +34,24 @@ internal sealed class SnapshotRingBuffer
     public void WriteAtHead(Snapshot snap)
     {
         _snapshots[_headIdx] = snap;
-        RecalculateDistances();
+    }
+
+    public void RecalculateDistances()
+    {
+        _distances[0] = 0;
+        _totalDistance = 0;
+
+        if (_count is < 2) return;
+
+        var prev = Get(0);
+        for (int i = 1; i < _count; i++)
+        {
+            var cur = Get(i);
+            float dist = (cur.Pos - prev.Pos).magnitude;
+            _totalDistance += dist;
+            _distances[i] = _totalDistance;
+            prev = cur;
+        }
     }
 
     public void AdvanceHead()
@@ -54,7 +70,7 @@ internal sealed class SnapshotRingBuffer
     public void InitFill(Snapshot snap)
     {
         for (int i = 0; i < Capacity; i++)
-            _snapshots[i] = snap;
+        _snapshots[i] = snap;
         _count = Capacity;
         _headIdx = 0;
     }
@@ -93,22 +109,5 @@ internal sealed class SnapshotRingBuffer
         float segLen = _distances[i] - prevDist;
         localT = segLen > 0 ? (targetDist - prevDist) / segLen : 0;
         return i - 1;
-    }
-
-    private void RecalculateDistances()
-    {
-        _distances[0] = 0;
-        _totalDistance = 0;
-
-        if (_count is < 2) return;
-
-        for (int i = 1; i < _count; i++)
-        {
-            var prev = Get(i - 1);
-            var cur = Get(i);
-            float dist = (cur.Pos - prev.Pos).magnitude;
-            _totalDistance += dist;
-            _distances[i] = _totalDistance;
-        }
     }
 }

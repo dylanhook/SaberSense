@@ -173,7 +173,7 @@ public class UITextInput : UIElement, IKeyboardTarget
     private void OpenKeyboard()
     {
         if (_keyboard is null)
-            _keyboard = new UIVirtualKeyboard(this, _canvasRoot);
+        _keyboard = new UIVirtualKeyboard(this, _canvasRoot);
         _keyboard.Show();
     }
 }

@@ -44,7 +44,7 @@ internal sealed class ViewportScrollbarAdjuster : MonoBehaviour
         _viewport.offsetMax = new Vector2(rightOffset, _viewport.offsetMax.y);
 
         if (_scrollbarGO != null)
-            _scrollbarGO.SetActive(scrollable);
+        _scrollbarGO.SetActive(scrollable);
 
         if (_searchBar != null)
         {

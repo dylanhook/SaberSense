@@ -28,7 +28,7 @@ internal sealed class VectorGraphic : Graphic
         vh.Clear();
 
         if (_verts is null || _tris is null || _verts.Count is 0 || !_bounds.IsValid)
-            return;
+        return;
 
         var rect = GetPixelAdjustedRect();
         var c = color;

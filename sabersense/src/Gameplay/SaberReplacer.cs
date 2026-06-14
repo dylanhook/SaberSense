@@ -3,10 +3,12 @@
 
 using SaberSense.Catalog;
 using SaberSense.Configuration;
+using SaberSense.Core;
 using SaberSense.Core.Logging;
 using SaberSense.Core.Utilities;
+using SaberSense.Loadout;
 using SaberSense.Profiles;
-using SaberSense.Services;
+using SaberSense.Rendering.Materials;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -23,7 +25,7 @@ internal sealed class SaberReplacer : IInitializable, IDisposable
     private readonly SaberLoadout _loadout;
     private readonly SaberCatalog _catalog;
     private readonly LoadoutCoordinator _coordinator;
-    private readonly ModSettings _cfg;
+    private readonly ModSettings _settings;
     private readonly SelectionRandomizer _rng;
     private readonly SharedMaterialPool _materialPool;
     private readonly IModLogger _log;
@@ -32,18 +34,18 @@ internal sealed class SaberReplacer : IInitializable, IDisposable
     private readonly string? _snapshotRightPath;
 
     private SaberReplacer(
-        SaberLoadout loadout,
-        SaberCatalog catalog,
-        LoadoutCoordinator coordinator,
-        ModSettings cfg,
-        SelectionRandomizer rng,
-        SharedMaterialPool materialPool,
-        IModLogger log)
+    SaberLoadout loadout,
+    SaberCatalog catalog,
+    LoadoutCoordinator coordinator,
+    ModSettings settings,
+    SelectionRandomizer rng,
+    SharedMaterialPool materialPool,
+    IModLogger log)
     {
         _loadout = loadout;
         _catalog = catalog;
         _coordinator = coordinator;
-        _cfg = cfg;
+        _settings = settings;
         _rng = rng;
         _materialPool = materialPool;
         _log = log.ForSource(nameof(SaberReplacer));
@@ -55,10 +57,10 @@ internal sealed class SaberReplacer : IInitializable, IDisposable
 
     public void Initialize()
     {
-        _materialPool.Clear();
+        _materialPool.Clear(MaterialPoolOwner.Gameplay);
 
-        _log.Debug($"Initialize: randomize={_cfg.RandomizeSaber} pipeline={_cfg.ActivePipeline}");
-        ReplacementTask = ApplyReplacement();
+        _log.Debug($"Initialize: randomize={_settings.RandomizeSaber} pipeline={_settings.ActivePipeline}");
+        ReplacementTask = ApplyReplacementAsync();
     }
 
     public void Dispose()
@@ -67,7 +69,7 @@ internal sealed class SaberReplacer : IInitializable, IDisposable
         if (_snapshotLeftPath is not null)
         {
             if (_snapshotRightPath is not null && _snapshotRightPath != _snapshotLeftPath)
-                _log.Warn($"Split-saber restore: left='{_snapshotLeftPath}' right='{_snapshotRightPath}' -- restoring from left entry only");
+            _log.Warn($"Split-saber restore: left='{_snapshotLeftPath}' right='{_snapshotRightPath}' -- restoring from left entry only");
             RestoreTask = RestoreOriginalAsync();
             ErrorBoundary.FireAndForget(RestoreTask, _log, nameof(SaberReplacer) + ".Dispose");
         }
@@ -83,7 +85,7 @@ internal sealed class SaberReplacer : IInitializable, IDisposable
                 await _coordinator.EquipAsync(entry, EquipSource.ConfigRestore);
 
                 if (entry.IsAssetStale)
-                    _log.Info($"Restored stale entry '{_snapshotLeftPath}' - will reload at next spawn");
+                _log.Info($"Restored stale entry '{_snapshotLeftPath}' - will reload at next spawn");
             }
         }
         catch (Exception ex)
@@ -92,23 +94,23 @@ internal sealed class SaberReplacer : IInitializable, IDisposable
         }
     }
 
-    private async Task ApplyReplacement()
+    private async Task ApplyReplacementAsync()
     {
-        if (_cfg.RandomizeSaber)
+        if (_settings.RandomizeSaber)
         {
-            await PickRandom();
+            await PickRandomAsync();
         }
     }
 
-    private async Task PickRandom()
+    private async Task PickRandomAsync()
     {
-        var isCustom = _cfg.ActivePipeline is ESaberPipeline.SaberAsset
-                                          or ESaberPipeline.None;
+        var isCustom = _settings.ActivePipeline is SaberPipeline.SaberAsset
+        or SaberPipeline.None;
         if (!isCustom) { _log.Debug("PickRandom: non-custom pipeline, skipping"); return; }
 
-        var candidates = _catalog.EnumeratePreviewsByTag(AssetTypeTag.SaberAsset)
-            .Where(p => p.RelativePath != DefaultSaberProvider.DefaultSaberPath)
-            .ToList();
+        var candidates = _catalog.EnumeratePreviews()
+        .Where(p => p.RelativePath != DefaultSaberProvider.DefaultSaberPath)
+        .ToList();
         if (candidates.Count is 0) { _log.Debug("PickRandom: no candidates"); return; }
         var chosen = _rng.PickRandom(candidates);
         if (chosen is null) return;

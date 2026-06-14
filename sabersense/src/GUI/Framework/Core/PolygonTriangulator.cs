@@ -47,7 +47,7 @@ internal static class PolygonTriangulator
 
         var parentOf = new int[contours.Count];
         for (int i = 0; i < contours.Count; i++)
-            parentOf[i] = -1;
+        parentOf[i] = -1;
 
         for (int i = 0; i < contours.Count; i++)
         {
@@ -84,7 +84,7 @@ internal static class PolygonTriangulator
             if (holes.Count is 0)
             {
                 for (int v = 0; v < outer.Count; v++)
-                    allVerts.Add(outer[v]);
+                allVerts.Add(outer[v]);
 
                 EarClip(allVerts, allTris, offset, outer.Count);
             }
@@ -92,13 +92,13 @@ internal static class PolygonTriangulator
             {
                 int outerStart = allVerts.Count;
                 for (int v = 0; v < outer.Count; v++)
-                    allVerts.Add(outer[v]);
+                allVerts.Add(outer[v]);
 
                 foreach (var hole in holes)
                 {
                     int holeStart = allVerts.Count;
                     for (int v = 0; v < hole.Count; v++)
-                        allVerts.Add(hole[v]);
+                    allVerts.Add(hole[v]);
 
                     TriangulateRing(allVerts, allTris, outerStart, outer.Count, holeStart, hole.Count);
                 }
@@ -109,27 +109,27 @@ internal static class PolygonTriangulator
     }
 
     private static void TriangulateRing(List<Vector2> verts, List<int> tris,
-        int outerStart, int outerCount, int holeStart, int holeCount)
+    int outerStart, int outerCount, int holeStart, int holeCount)
     {
         var center = Vector2.zero;
         for (int i = 0; i < holeCount; i++)
-            center += verts[holeStart + i];
+        center += verts[holeStart + i];
         center /= holeCount;
 
         var outerAngles = new float[outerCount];
         var holeAngles = new float[holeCount];
         for (int i = 0; i < outerCount; i++)
-            outerAngles[i] = Mathf.Atan2(verts[outerStart + i].y - center.y,
-                                          verts[outerStart + i].x - center.x);
+        outerAngles[i] = Mathf.Atan2(verts[outerStart + i].y - center.y,
+        verts[outerStart + i].x - center.x);
         for (int i = 0; i < holeCount; i++)
-            holeAngles[i] = Mathf.Atan2(verts[holeStart + i].y - center.y,
-                                         verts[holeStart + i].x - center.x);
+        holeAngles[i] = Mathf.Atan2(verts[holeStart + i].y - center.y,
+        verts[holeStart + i].x - center.x);
 
         int oStart = 0, hStart = 0;
         for (int i = 1; i < outerCount; i++)
-            if (outerAngles[i] < outerAngles[oStart]) oStart = i;
+        if (outerAngles[i] < outerAngles[oStart]) oStart = i;
         for (int i = 1; i < holeCount; i++)
-            if (holeAngles[i] < holeAngles[hStart]) hStart = i;
+        if (holeAngles[i] < holeAngles[hStart]) hStart = i;
 
         int oi = 0, hi = 0;
         int total = outerCount + holeCount;
@@ -143,9 +143,9 @@ internal static class PolygonTriangulator
 
             bool advanceOuter;
             if (oi >= outerCount)
-                advanceOuter = false;
+            advanceOuter = false;
             else if (hi >= holeCount)
-                advanceOuter = true;
+            advanceOuter = true;
             else
             {
                 float oNextAngle = outerAngles[(oStart + oi + 1) % outerCount];
@@ -174,7 +174,7 @@ internal static class PolygonTriangulator
     {
         var idx = new List<int>(count);
         for (int i = 0; i < count; i++)
-            idx.Add(start + i);
+        idx.Add(start + i);
 
         int safety = count * count;
         while (idx.Count is > 2 && safety-- > 0)
@@ -216,7 +216,7 @@ internal static class PolygonTriangulator
         }
 
         if (idx.Count > 2)
-            ModLogger.ForSource("EarClipTriangulator").Warn($"Incomplete triangulation: {idx.Count} vertices remain from degenerate polygon");
+        ModLogger.ForSource("EarClipTriangulator").Warn($"Incomplete triangulation: {idx.Count} vertices remain from degenerate polygon");
     }
 
     private static float Cross(Vector2 a, Vector2 b, Vector2 c)
@@ -241,8 +241,8 @@ internal static class PolygonTriangulator
         for (int i = 0; i < polygon.Count; i++)
         {
             if ((polygon[i].y > point.y) != (polygon[j].y > point.y) &&
-                point.x < (polygon[j].x - polygon[i].x) * (point.y - polygon[i].y) /
-                          (polygon[j].y - polygon[i].y) + polygon[i].x)
+            point.x < (polygon[j].x - polygon[i].x) * (point.y - polygon[i].y) /
+            (polygon[j].y - polygon[i].y) + polygon[i].x)
             {
                 inside = !inside;
             }
@@ -263,6 +263,6 @@ internal static class PolygonTriangulator
 
         bool isCW = area > 0;
         if (isCW != clockwise)
-            poly.Reverse();
+        poly.Reverse();
     }
 }

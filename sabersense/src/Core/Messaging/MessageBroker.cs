@@ -50,7 +50,7 @@ internal sealed class MessageBroker : IMessageBroker
         lock (_lock)
         {
             if (!_subscriptions.TryGetValue(typeof(T), out var list))
-                _subscriptions[typeof(T)] = list = [];
+            _subscriptions[typeof(T)] = list = [];
             list.Add(handler);
         }
 
@@ -59,7 +59,7 @@ internal sealed class MessageBroker : IMessageBroker
             lock (_lock)
             {
                 if (_subscriptions.TryGetValue(typeof(T), out var list))
-                    list.Remove(handler);
+                list.Remove(handler);
             }
         });
     }

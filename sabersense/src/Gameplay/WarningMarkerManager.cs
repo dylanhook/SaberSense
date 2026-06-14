@@ -12,7 +12,7 @@ internal sealed class WarningMarkerManager : IInitializable, IDisposable
 {
     [Inject] private readonly BeatmapObjectManager _beatmapObjectManager = null!;
     [Inject] private readonly WarningMarkerBehavior.Pool _pool = null!;
-    [Inject] private readonly ModSettings _config = null!;
+    [Inject] private readonly ModSettings _settings = null!;
 
     private readonly WarningMarkerBehavior?[] _activeMarkers = new WarningMarkerBehavior?[2];
     private readonly NoteController?[] _activeNotes = new NoteController?[2];
@@ -74,7 +74,7 @@ internal sealed class WarningMarkerManager : IInitializable, IDisposable
         if (data.colorType == ColorType.None) return false;
         if (!PassesLayerFilter(data.noteLineLayer)) return false;
 
-        var types = _config.WarningTypes;
+        var types = _settings.WarningTypes;
 
         if (types.Contains(2)) return true;
 
@@ -86,7 +86,7 @@ internal sealed class WarningMarkerManager : IInitializable, IDisposable
 
     private bool PassesLayerFilter(NoteLineLayer layer)
     {
-        var filter = _config.WarningLayerFilter;
+        var filter = _settings.WarningLayerFilter;
         return layer switch
         {
             NoteLineLayer.Top => filter.Contains(0),
@@ -113,8 +113,8 @@ internal sealed class WarningMarkerManager : IInitializable, IDisposable
     }
 
     private static bool CheckAngle(
-        NoteCutDirection current, float time,
-        ref NoteCutDirection lastDir, ref float lastTime)
+    NoteCutDirection current, float time,
+    ref NoteCutDirection lastDir, ref float lastTime)
     {
         bool tooClose = Mathf.Abs(time - lastTime) < 0.15f;
         lastTime = time;

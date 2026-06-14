@@ -27,18 +27,12 @@ public abstract class UIElement : IDisposable
         RectTransform.anchoredPosition = Vector2.zero;
     }
 
-    protected void ThrowIfDisposed()
-    {
-        if (_disposed)
-            throw new ObjectDisposedException(GetType().Name);
-    }
-
     public virtual void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
 
         if (GameObject != null)
-            UnityEngine.Object.Destroy(GameObject);
+        UnityEngine.Object.Destroy(GameObject);
     }
 }

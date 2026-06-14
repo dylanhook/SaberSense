@@ -23,17 +23,3 @@ public sealed class VisibilityRule : ModifierRuleBase
 }
 
 public sealed class TransformRule : ModifierRuleBase;
-
-public sealed class ComponentRule
-{
-    public string Name { get; init; } = "";
-
-    public int Id { get; init; }
-
-    public string ComponentTypeName { get; init; } = "";
-
-    public int TargetObjectIndex { get; init; }
-
-    [Newtonsoft.Json.JsonIgnore]
-    public UnityEngine.GameObject? Target { get; internal set; }
-}

@@ -46,21 +46,21 @@ public class UICollapsibleSection : UIElement
         var header = new HBox(title + "_Header");
         header.RectTransform.SetParent(RectTransform, false);
         header.SetSpacing(UITheme.RowInnerSpacing).SetPadding(0, 0, 0, 0)
-            .AddLayoutElement(preferredHeight: HeaderHeight, flexibleWidth: 1);
+        .AddLayoutElement(preferredHeight: HeaderHeight, flexibleWidth: 1);
         header.LayoutGroup.childAlignment = TextAnchor.LowerLeft;
         header.LayoutGroup.childForceExpandHeight = false;
 
         _chevron = new UILabel(title + "_Chev", ChevronCollapsed)
-            .SetFontSize(UITheme.FontSmall)
-            .SetColor(UITheme.TextMuted)
-            .SetAlignment(TMPro.TextAlignmentOptions.Left);
+        .SetFontSize(UITheme.FontSmall)
+        .SetColor(UITheme.TextMuted)
+        .SetAlignment(TMPro.TextAlignmentOptions.Left);
         _chevron.RectTransform.SetParent(header.RectTransform, false);
         _chevron.AddLayoutElement(preferredWidth: ChevronWidth, preferredHeight: HeaderHeight);
 
         _titleLabel = new UILabel(title + "_L", title)
-            .SetFontSize(UITheme.FontSmall)
-            .SetColor(UITheme.Accent)
-            .SetAlignment(TMPro.TextAlignmentOptions.Left);
+        .SetFontSize(UITheme.FontSmall)
+        .SetColor(UITheme.Accent)
+        .SetAlignment(TMPro.TextAlignmentOptions.Left);
         _titleLabel.RectTransform.SetParent(header.RectTransform, false);
         _titleLabel.AddLayoutElement(flexibleWidth: 1, preferredHeight: HeaderHeight);
         UITheme.TrackAccent(_titleLabel.TextComponent);
@@ -89,7 +89,7 @@ public class UICollapsibleSection : UIElement
         wrapperFitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
         var guideLine = new UIImage(title + "_Guide")
-            .SetColor(GuideLineColor);
+        .SetColor(GuideLineColor);
         guideLine.RectTransform.SetParent(wrapperRect, false);
         guideLine.ImageComponent.raycastTarget = false;
         guideLine.AddLayoutElement(preferredWidth: GuideLineWidth, flexibleHeight: 1);
@@ -133,12 +133,12 @@ public class UICollapsibleSection : UIElement
         _chevron.SetText(expanded ? ChevronExpanded : ChevronCollapsed);
 
         if (expanded)
-            LayoutRebuilder.ForceRebuildLayoutImmediate(RectTransform);
+        LayoutRebuilder.ForceRebuildLayoutImmediate(RectTransform);
 
         if (expanded)
-            _expandedSections.Add(_title);
+        _expandedSections.Add(_title);
         else
-            _expandedSections.Remove(_title);
+        _expandedSections.Remove(_title);
     }
 
     public static void ResetExpandedState() => _expandedSections.Clear();

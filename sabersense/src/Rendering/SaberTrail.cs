@@ -10,11 +10,11 @@ using UnityEngine.Rendering;
 namespace SaberSense.Rendering;
 
 internal readonly record struct TrailSetup(
-    int Duration,
-    float WhiteFade,
-    Color Tint,
-    int Resolution,
-    int CaptureRate);
+int Duration,
+float WhiteFade,
+Color Tint,
+int Resolution,
+int CaptureRate);
 
 internal sealed class SaberTrail : MonoBehaviour
 {
@@ -167,17 +167,18 @@ internal sealed class SaberTrail : MonoBehaviour
         }
 
         _buffer.WriteAtHead(_lastSnapshot);
+        _buffer.RecalculateDistances();
 
         float trailWidth = (PointStart.position - PointEnd.position).magnitude;
         _meshBuilder.Update(
-            _mesh,
-            _buffer,
-            GetPlayerOffset(),
-            LocalSpaceTrails,
-            trailWidth,
-            WhiteStep,
-            Color,
-            HugeBounds
+        _mesh,
+        _buffer,
+        GetPlayerOffset(),
+        LocalSpaceTrails,
+        trailWidth,
+        WhiteStep,
+        Color,
+        HugeBounds
         );
 
         _advanceTimer += Time.deltaTime;
@@ -191,7 +192,7 @@ internal sealed class SaberTrail : MonoBehaviour
         }
 
         if (_advanceTimer > AdvanceInterval)
-            _advanceTimer = 0f;
+        _advanceTimer = 0f;
     }
 
     private void CaptureSnapshot()

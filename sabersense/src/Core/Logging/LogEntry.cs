@@ -31,7 +31,7 @@ internal readonly struct LogEntry
             _ => "???"
         };
         return string.IsNullOrEmpty(Source)
-            ? $"[{Timestamp:HH:mm:ss.fff}] [{tag}] {Message}"
-            : $"[{Timestamp:HH:mm:ss.fff}] [{tag}] [{Source}] {Message}";
+        ? $"[{Timestamp:HH:mm:ss.fff}] [{tag}] {Message}"
+        : $"[{Timestamp:HH:mm:ss.fff}] [{tag}] [{Source}] {Message}";
     }
 }

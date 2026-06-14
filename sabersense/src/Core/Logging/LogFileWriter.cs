@@ -20,7 +20,7 @@ internal sealed class LogFileWriter : ILogSink, IDisposable
 
         var dir = Path.GetDirectoryName(filePath);
         if (!string.IsNullOrEmpty(dir))
-            Directory.CreateDirectory(dir);
+        Directory.CreateDirectory(dir);
 
         _writer = new StreamWriter(filePath, false, System.Text.Encoding.UTF8)
         {

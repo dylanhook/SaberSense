@@ -19,12 +19,12 @@ internal sealed class ShaderRegistry(IModLogger log)
     public static Shader? FirstAvailable(params Shader[] candidates)
     {
         foreach (var s in candidates)
-            if (s != null) return s;
+        if (s != null) return s;
         return null;
     }
 
     public Shader ParticleWithFallback =>
-        FirstAvailable(LegacyParticlesAlpha, UIDefault)!;
+    FirstAvailable(LegacyParticlesAlpha, UIDefault)!;
 
     public Shader UnlitWithFallback => UIDefault;
 
@@ -34,7 +34,7 @@ internal sealed class ShaderRegistry(IModLogger log)
     {
         var shader = Shader.Find(name);
         if (shader == null)
-            log?.Warn($"Shader '{name}' not found - features using it will fall back.");
+        log?.Warn($"Shader '{name}' not found - features using it will fall back.");
         return shader!;
     }
 }

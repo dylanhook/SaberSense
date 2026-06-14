@@ -1,24 +1,23 @@
 // Copyright (c) 2026 dylanhook. All rights reserved.
 // Licensed under the SaberSense Proprietary License. See LICENSE file in the project root.
 
+using SaberSense.App;
+using SaberSense.AssetPipeline;
+using SaberSense.Catalog.Model;
 using SaberSense.Core;
 using SaberSense.Core.Logging;
 using SaberSense.Core.Messaging;
 using SaberSense.Core.Utilities;
-using SaberSense.Loaders;
-using SaberSense.Profiles;
-using SaberSense.Profiles.SaberAsset;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace SaberSense.Catalog;
 
-public sealed class SaberCatalog : IDisposable, IAsyncLoadable
+public sealed partial class SaberCatalog : IDisposable, IAsyncLoadable
 {
     private readonly List<string> _externalSearchPaths = [];
     public IReadOnlyList<string> ExternalSearchPaths => _externalSearchPaths;
@@ -40,19 +39,20 @@ public sealed class SaberCatalog : IDisposable, IAsyncLoadable
     private readonly ConcurrentDictionary<string, AssetPreview> _previews = new();
     private readonly ConcurrentDictionary<string, SaberAssetEntry> _loadedEntries = new();
     private readonly AsyncOnce _scanGuard = new();
-    private readonly ConcurrentDictionary<string, SemaphoreSlim> _refreshLocks = new();
+
+    private readonly ConcurrentDictionary<string, Task<SaberAssetEntry?>> _inflight = new();
     private readonly SemaphoreSlim _scanPause = new(1, 1);
     private Task? _scanTask;
 
-    internal Action<int, int>? OnScanProgress;
+    private int _reconciling;
 
     private SaberCatalog(
-        IModLogger log,
-        SaberAssetBuilder saberParser,
-        AppPaths dirs,
-        List<ISaberLoader> loaders,
-        IMessageBroker broker,
-        PinTracker pins)
+    IModLogger log,
+    SaberAssetBuilder saberParser,
+    AppPaths dirs,
+    List<ISaberLoader> loaders,
+    IMessageBroker broker,
+    PinTracker pins)
     {
         _log = log.ForSource(nameof(SaberCatalog));
         _dirs = dirs;
@@ -68,9 +68,6 @@ public sealed class SaberCatalog : IDisposable, IAsyncLoadable
         PurgeAll();
         _db?.Dispose();
         _scanPause.Dispose();
-
-        foreach (var sem in _refreshLocks.Values) sem.Dispose();
-        _refreshLocks.Clear();
     }
 
     public void DiscoverExternalFolders()
@@ -85,17 +82,33 @@ public sealed class SaberCatalog : IDisposable, IAsyncLoadable
         }
     }
 
-    public async Task<SaberAssetEntry?> ResolveEntryAsync(string relativePath)
+    public Task<SaberAssetEntry?> ResolveEntryAsync(string relativePath)
     {
-        if (_loadedEntries.TryGetValue(relativePath, out var entry)) return entry;
-        return await InflateEntryAsync(relativePath);
+        if (_loadedEntries.TryGetValue(relativePath, out var entry)) return Task.FromResult<SaberAssetEntry?>(entry);
+
+        return LoadDedupedAsync(relativePath);
+    }
+
+    private Task<SaberAssetEntry?> LoadDedupedAsync(string relativePath)
+    => _inflight.GetOrAdd(relativePath, p => DedupedInflateAsync(p));
+
+    private async Task<SaberAssetEntry?> DedupedInflateAsync(string relativePath)
+    {
+        try
+        {
+            return await InflateEntryAsync(relativePath);
+        }
+        finally
+        {
+            _inflight.TryRemove(relativePath, out _);
+        }
     }
 
     public SaberAssetEntry? TryGetLoaded(string relativePath)
-        => _loadedEntries.TryGetValue(relativePath, out var entry) ? entry : null;
+    => _loadedEntries.TryGetValue(relativePath, out var entry) ? entry : null;
 
     public Task<SaberAssetEntry?> ResolveEntryByPreviewAsync(AssetPreview preview) =>
-        this[preview.RelativePath];
+    this[preview.RelativePath];
 
     internal Task PreparePreviewsAsync() => ScanAllPreviewsAsync();
 
@@ -106,8 +119,8 @@ public sealed class SaberCatalog : IDisposable, IAsyncLoadable
         var ext = Path.GetExtension(relativePath);
         ISaberLoader? loader = null;
         foreach (var l in _loaders)
-            if (string.Equals(l.HandledExtension, ext, StringComparison.OrdinalIgnoreCase))
-            { loader = l; break; }
+        if (string.Equals(l.HandledExtension, ext, StringComparison.OrdinalIgnoreCase))
+        { loader = l; break; }
         if (loader is null) return false;
 
         await ExtractAndStorePreviewAsync(loader, relativePath);
@@ -129,7 +142,6 @@ public sealed class SaberCatalog : IDisposable, IAsyncLoadable
                 await _scanTask;
             }
             _db.Save();
-            _broker.Publish(new ScanCompleteMsg());
         });
     }
 
@@ -139,8 +151,7 @@ public sealed class SaberCatalog : IDisposable, IAsyncLoadable
         return _previews.TryGetValue(key, out var preview) ? preview : null;
     }
 
-    public IEnumerable<AssetPreview> EnumeratePreviewsByTag(AssetTypeTag tag) =>
-        _previews.Values.Where(p => p.TypeTag.Equals(tag));
+    public IEnumerable<AssetPreview> EnumeratePreviews() => _previews.Values;
 
     public void PersistPreview(AssetPreview preview)
     {
@@ -172,7 +183,7 @@ public sealed class SaberCatalog : IDisposable, IAsyncLoadable
     }
 
     private static bool IsDefaultSaber(string path) =>
-        string.Equals(path, DefaultSaberProvider.DefaultSaberPath, StringComparison.Ordinal);
+    string.Equals(path, DefaultSaberProvider.DefaultSaberPath, StringComparison.Ordinal);
 
     public void PurgeAll()
     {
@@ -203,185 +214,71 @@ public sealed class SaberCatalog : IDisposable, IAsyncLoadable
             changed = true;
         }
         if (changed)
-            _broker?.Publish(new SettingsChangedMsg());
+        _broker?.Publish(new SettingsChangedMsg());
     }
 
     public async Task RefreshSpecificAsync(string path)
     {
         if (IsDefaultSaber(path)) return;
 
-        var sem = _refreshLocks.GetOrAdd(path, _ => new(1, 1));
-        await sem.WaitAsync();
+        if (_loadedEntries.TryGetValue(path, out var existing) && !existing.IsAssetStale)
+        return;
+
+        byte[]? rescuedCoverBytes = null;
+        try { rescuedCoverBytes = _db!.GetPreview(path)?.CoverBytes; }
+        catch (Exception ex) { _log.Debug($"Cover rescue failed for '{path}' (will regenerate): {ex.Message}"); }
+
+        UnloadSpecific(path);
+
+        await LoadDedupedAsync(path);
+        await GenerateAndStorePreviewAsync(path, rescuedCoverBytes);
+    }
+
+    public async Task ReconcileAsync()
+    {
+        if (_db is null) return;
+
+        if (Interlocked.CompareExchange(ref _reconciling, 1, 0) is not 0) return;
         try
         {
-            if (_loadedEntries.TryGetValue(path, out var existing) && !existing.IsAssetStale)
-                return;
+            var onDisk = new HashSet<string>(StringComparer.Ordinal);
+            bool changed = false;
 
-            byte[]? rescuedCoverBytes = null;
-            try { rescuedCoverBytes = _db!.GetPreview(path)?.CoverBytes; }
-            catch (Exception ex) { _log.Debug($"Cover rescue failed for '{path}' (will regenerate): {ex.Message}"); }
-
-            UnloadSpecific(path);
-
-            await InflateEntryAsync(path);
-            await GenerateAndStorePreviewAsync(path, rescuedCoverBytes);
-        }
-        finally
-        {
-            sem.Release();
-        }
-    }
-
-    public async Task RefreshAllAsync()
-    {
-        PurgeAll();
-        _scanGuard.Reset();
-
-        await ScanAllPreviewsAsync();
-    }
-
-    private async Task ExecuteScanAsync(ISaberLoader loader, bool forceGeneration)
-    {
-        var timer = new PerfTimer("Scanning Saber Catalog");
-        var pendingPaths = new List<string>();
-        int discovered = 0;
-
-        await foreach (var discovery in loader.DiscoverAsync(_dirs))
-        {
-            discovered++;
-
-            if (_previews.ContainsKey(discovery.RelativePath)) continue;
-
-            if (_db!.HasCurrentPreview(discovery.RelativePath))
+            foreach (var loader in _loaders)
             {
-                var row = _db.GetPreview(discovery.RelativePath);
-                if (row is not null)
+                await foreach (var route in loader.DiscoverAsync(_dirs))
                 {
-                    var preview = new AssetPreview(row);
-                    ApplyPinState(preview, discovery.RelativePath);
-                    if (InjectSiblingCoverIfNeeded(preview))
-                        _db.UpsertPreview(preview.ToRow());
+                    onDisk.Add(route.RelativePath);
 
-                    _previews.TryAdd(discovery.RelativePath, preview);
-                    continue;
+                    if (!_previews.ContainsKey(route.RelativePath))
+                    {
+                        if (await AddPreviewAsync(route.RelativePath))
+                        changed = true;
+                    }
                 }
             }
 
-            if (forceGeneration)
-                pendingPaths.Add(discovery.RelativePath);
-        }
+            foreach (var key in _previews.Keys)
+            {
+                if (IsDefaultSaber(key) || onDisk.Contains(key)) continue;
+                UnloadSpecific(key);
+                _db.DeletePreview(key);
+                changed = true;
+            }
 
-        int completed = discovered - pendingPaths.Count;
-        OnScanProgress?.Invoke(completed, discovered);
-
-        const int batchSize = 8;
-        for (int i = 0; i < pendingPaths.Count; i += batchSize)
-        {
-            var batch = pendingPaths.GetRange(i, Math.Min(batchSize, pendingPaths.Count - i));
-            await Task.WhenAll(batch.Select(path => ExtractAndStorePreviewAsync(loader, path)));
-            completed += batch.Count;
-            OnScanProgress?.Invoke(completed, discovered);
-        }
-
-        if (pendingPaths.Count > 0)
-            _db!.Save();
-
-        timer.Print(_log);
-    }
-
-    private async Task ExtractAndStorePreviewAsync(ISaberLoader loader, string relativePath)
-    {
-        if (_previews.ContainsKey(relativePath)) return;
-
-        await _scanPause.WaitAsync();
-        _scanPause.Release();
-
-        try
-        {
-            var data = await loader.ExtractPreviewAsync(relativePath);
-            if (data is null) return;
-
-            var preview = new AssetPreview(relativePath, data.Value);
-            ApplyPinState(preview, relativePath);
-            InjectSiblingCoverIfNeeded(preview);
-
-            _db!.UpsertPreview(preview.ToRow());
-            _previews.TryAdd(relativePath, preview);
+            if (changed)
+            {
+                _db.Save();
+                _broker?.Publish(new SettingsChangedMsg());
+            }
         }
         catch (Exception ex)
         {
-            _log.Warn($"Preview extraction failed for {relativePath}: {ex.Message}");
-        }
-    }
-
-    internal async Task<SaberAssetEntry?> GenerateAndStorePreviewAsync(
-        string relativePath, byte[]? rescuedCoverBytes = null)
-    {
-        if (_previews.ContainsKey(relativePath)) return null;
-
-        var entry = await this[relativePath];
-        if (entry is null) return null;
-
-        var preview = new AssetPreview(relativePath, entry, entry.TypeTag);
-        ApplyPinState(preview, relativePath);
-
-        if (preview.CoverImage == null && rescuedCoverBytes is { Length: > 0 })
-            preview.InjectCoverBytes(rescuedCoverBytes);
-
-        try
-        {
-            _db!.UpsertPreview(preview.ToRow());
-        }
-        catch (Exception ex)
-        {
-            _log.Error($"Failed to write preview to database: {ex}");
-        }
-
-        _previews.TryAdd(relativePath, preview);
-        return entry;
-    }
-
-    private async Task<SaberAssetEntry?> InflateEntryAsync(string relativePath)
-    {
-        await _scanPause.WaitAsync();
-        try
-        {
-            return await InflateEntryCore(relativePath);
+            _log.Warn($"Catalog reconcile failed: {ex.Message}");
         }
         finally
         {
-            _scanPause.Release();
+            Interlocked.Exchange(ref _reconciling, 0);
         }
-    }
-
-    private async Task<SaberAssetEntry?> InflateEntryCore(string relativePath)
-    {
-        var ext = Path.GetExtension(relativePath);
-        var loader = _loaders.FirstOrDefault(l => string.Equals(l.HandledExtension, ext, StringComparison.OrdinalIgnoreCase));
-        if (loader is null) return null;
-
-        var rawAsset = await loader.LoadAsync(relativePath);
-        if (rawAsset is null) return null;
-
-        var entry = _saberParser.ParseAsset(rawAsset);
-        if (entry is not null)
-        {
-            _loadedEntries.TryAdd(relativePath, entry);
-            _broker?.Publish(new SaberLoadedMsg(entry));
-        }
-        return entry;
-    }
-
-    private void ApplyPinState(AssetPreview preview, string relativePath)
-        => preview.IsPinned = _pins.Contains(relativePath);
-
-    private bool InjectSiblingCoverIfNeeded(AssetPreview preview)
-    {
-        if (preview.CoverImage != null || string.IsNullOrEmpty(preview.ContentHash))
-            return false;
-        var siblingCover = _db!.FindCoverByContentHash(preview.ContentHash);
-        if (siblingCover is null) return false;
-        preview.InjectCoverBytes(siblingCover);
-        return true;
     }
 }

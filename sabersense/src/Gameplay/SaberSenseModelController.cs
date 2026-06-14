@@ -4,15 +4,14 @@
 using CameraUtils.Core;
 using IPA.Utilities;
 using SaberSense.Configuration;
-using SaberSense.Core;
 using SaberSense.Core.Logging;
 using SaberSense.Core.Utilities;
 using SaberSense.Profiles;
 using SaberSense.Rendering;
+using SaberSense.Rendering.Materials;
 using SaberSense.Services;
 using SiraUtil.Interfaces;
 using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
 using Zenject;
 
@@ -24,25 +23,25 @@ internal sealed class SaberSenseModelController : SaberModelController, IColorab
     private IModLogger _log = null!;
     private LiveSaber.Factory _liveFactory = null!;
     private SaberLoadout _loadout = null!;
-    private ConfigManager _configManager = null!;
+    private IConfigStore _configManager = null!;
     private List<IClashCustomizer> _customizers = null!;
-    private ModSettings _pluginConfig = null!;
+    private ModSettings _settings = null!;
     private ViewVisibilityService _viewVis = null!;
     private IDefaultSaberProvider? _defaultSabers;
     private SaberEventRouter? _eventRouter;
 
     [Inject]
     public void Construct(
-        SaberReplacer replacer,
-        IModLogger log,
-        LiveSaber.Factory liveFactory,
-        SaberLoadout loadout,
-        ConfigManager configManager,
-        List<IClashCustomizer> customizers,
-        ModSettings pluginConfig,
-        ViewVisibilityService viewVis,
-        [InjectOptional] IDefaultSaberProvider? defaultSabers,
-        [InjectOptional] SaberEventRouter? eventRouter)
+    SaberReplacer replacer,
+    IModLogger log,
+    LiveSaber.Factory liveFactory,
+    SaberLoadout loadout,
+    IConfigStore configManager,
+    List<IClashCustomizer> customizers,
+    ModSettings settings,
+    ViewVisibilityService viewVis,
+    [InjectOptional] IDefaultSaberProvider? defaultSabers,
+    [InjectOptional] SaberEventRouter? eventRouter)
     {
         _replacer = replacer;
         _log = log.ForSource(nameof(SaberSenseModelController));
@@ -50,7 +49,7 @@ internal sealed class SaberSenseModelController : SaberModelController, IColorab
         _loadout = loadout;
         _configManager = configManager;
         _customizers = customizers;
-        _pluginConfig = pluginConfig;
+        _settings = settings;
         _viewVis = viewVis;
         _defaultSabers = defaultSabers;
         _eventRouter = eventRouter;
@@ -64,17 +63,17 @@ internal sealed class SaberSenseModelController : SaberModelController, IColorab
     private static class Reflectors
     {
         public static readonly FieldAccessor<SaberModelController, ColorManager>.Accessor ColorManager
-            = FieldAccessor<SaberModelController, ColorManager>.GetAccessor("_colorManager");
+        = FieldAccessor<SaberModelController, ColorManager>.GetAccessor("_colorManager");
         public static readonly FieldAccessor<SaberModelController, SetSaberGlowColor[]>.Accessor GlowColors
-            = FieldAccessor<SaberModelController, SetSaberGlowColor[]>.GetAccessor("_setSaberGlowColors");
+        = FieldAccessor<SaberModelController, SetSaberGlowColor[]>.GetAccessor("_setSaberGlowColors");
         public static readonly FieldAccessor<SaberModelController, SetSaberFakeGlowColor[]>.Accessor FakeGlowColors
-            = FieldAccessor<SaberModelController, SetSaberFakeGlowColor[]>.GetAccessor("_setSaberFakeGlowColors");
+        = FieldAccessor<SaberModelController, SetSaberFakeGlowColor[]>.GetAccessor("_setSaberFakeGlowColors");
         public static readonly FieldAccessor<SetSaberGlowColor, ColorManager>.Accessor GlowColorManager
-            = FieldAccessor<SetSaberGlowColor, ColorManager>.GetAccessor("_colorManager");
+        = FieldAccessor<SetSaberGlowColor, ColorManager>.GetAccessor("_colorManager");
         public static readonly FieldAccessor<SetSaberFakeGlowColor, ColorManager>.Accessor FakeGlowColorManager
-            = FieldAccessor<SetSaberFakeGlowColor, ColorManager>.GetAccessor("_colorManager");
+        = FieldAccessor<SetSaberFakeGlowColor, ColorManager>.GetAccessor("_colorManager");
         public static readonly FieldAccessor<global::SaberTrail, SaberTrailRenderer>.Accessor TrailRenderer
-            = FieldAccessor<global::SaberTrail, SaberTrailRenderer>.GetAccessor("_trailRenderer");
+        = FieldAccessor<global::SaberTrail, SaberTrailRenderer>.GetAccessor("_trailRenderer");
     }
 
     public Color Color
@@ -87,7 +86,7 @@ internal sealed class SaberSenseModelController : SaberModelController, IColorab
     {
         _tint = color;
         foreach (var saber in _allSabers)
-            saber?.SetColor(color);
+        saber?.SetColor(color);
     }
 
     public bool PreInit(Transform parent, Saber saber)
@@ -98,28 +97,28 @@ internal sealed class SaberSenseModelController : SaberModelController, IColorab
 
     private void SpawnAsync(Transform parent, Saber saber)
     {
-        ErrorBoundary.FireAndForget(SpawnAsyncCore(parent, saber), _log, nameof(SpawnAsync));
+        ErrorBoundary.FireAndForget(SpawnCore(parent, saber), _log, nameof(SpawnAsync));
     }
 
-    private async System.Threading.Tasks.Task SpawnAsyncCore(Transform parent, Saber saber)
+    private async System.Threading.Tasks.Task SpawnCore(Transform parent, Saber saber)
     {
-        _log.Debug($"SpawnAsyncCore: saberType={saber.saberType} awaiting ReplacementTask");
+        _log.Debug($"SpawnCore: saberType={saber.saberType} awaiting ReplacementTask");
         await _replacer.ReplacementTask;
         if (_destroyed) return;
         transform.SetParent(parent, false);
 
-        _log.Debug($"SpawnAsyncCore: ensuring assets valid for {saber.saberType}");
+        _log.Debug($"SpawnCore: ensuring assets valid for {saber.saberType}");
         await _configManager.EnsureAssetsValidAsync();
         if (_destroyed) return;
 
         var profile = GetProfileForSaberType(saber.saberType);
-        _log.Debug($"SpawnAsyncCore: spawning {saber.saberType} pieces={profile.Pieces.Count} hand={profile.Hand}");
+        _log.Debug($"SpawnCore: spawning {saber.saberType} equipped={profile.Equipped is not null} hand={profile.Hand}");
         _activeSaber = SpawnPrimarySaber(saber);
 
         if (_activeSaber.EventDispatcher is not null)
-            _eventRouter?.BindEvents(_activeSaber.EventDispatcher, saber.saberType);
+        _eventRouter?.BindEvents(_activeSaber.EventDispatcher, saber.saberType);
 
-        var vis = new VisibilityPolicy(_viewVis, _pluginConfig);
+        var vis = new VisibilityPolicy(_viewVis, _settings);
         ApplyViewSplitting(saber, vis);
         SpawnDefaultSaberMirror(parent, saber, vis);
         SetColor(_tint ?? _colorManager.ColorForSaberType(_activeSaber.Profile.Hand.ToSaberType()));
@@ -133,16 +132,16 @@ internal sealed class SaberSenseModelController : SaberModelController, IColorab
     }
 
     private SaberProfile GetProfileForSaberType(SaberType type)
-        => type == SaberType.SaberA ? _loadout.Left : _loadout.Right;
+    => type == SaberType.SaberA ? _loadout.Left : _loadout.Right;
 
     private LiveSaber SpawnPrimarySaber(Saber saber)
     {
         var profile = GetProfileForSaberType(saber.saberType);
-        var liveSaber = _liveFactory.Create(profile);
+        var liveSaber = _liveFactory.Create(profile, MaterialPoolOwner.Gameplay);
         _allSabers.Add(liveSaber);
 
         if (saber.saberType == SaberType.SaberA)
-            foreach (var c in _customizers) c.SetSaber(liveSaber);
+        foreach (var c in _customizers) c.SetSaber(liveSaber);
 
         liveSaber.ActivateForGameplay(transform, _saberTrail);
         return liveSaber;
@@ -158,7 +157,7 @@ internal sealed class SaberSenseModelController : SaberModelController, IColorab
         {
             _log.Debug($"ApplyViewSplitting: {saber.saberType} -> dual copy (smoothed + unsmoothed)");
             smoothedSaber = _activeSaber;
-            unsmoothedSaber = _liveFactory.Create(profile);
+            unsmoothedSaber = _liveFactory.Create(profile, MaterialPoolOwner.Gameplay);
             _allSabers.Add(unsmoothedSaber);
             if (saber.saberType == SaberType.SaberA) foreach (var c in _customizers) c.SetSaber(unsmoothedSaber);
             unsmoothedSaber.SetParent(transform);
@@ -170,7 +169,7 @@ internal sealed class SaberSenseModelController : SaberModelController, IColorab
 
         if (smoothedSaber != null)
         {
-            SaberSmoother.InsertAbove(smoothedSaber.CachedTransform, transform, _pluginConfig!.SmoothingStrength);
+            SaberSmoother.InsertAbove(smoothedSaber.CachedTransform, transform, _settings!.SmoothingStrength);
             ApplyVisibility(smoothedSaber.GameObject, vis.SmoothedSaber, vis.SmoothedTrail.Any());
             ApplyTrailVisibility(smoothedSaber, vis.SmoothedTrail);
         }
@@ -192,7 +191,7 @@ internal sealed class SaberSenseModelController : SaberModelController, IColorab
 
         var profile = GetProfileForSaberType(saber.saberType);
         if (profile.TryGetSaberAsset(out var def) &&
-            def?.Asset?.RelativePath == Catalog.DefaultSaberProvider.DefaultSaberPath)
+        def?.Asset?.RelativePath == Catalog.DefaultSaberProvider.DefaultSaberPath)
         {
             _log.Debug($"SpawnDefaultSaberMirror: {saber.saberType} -> skipping (equipped IS default)");
             return;
@@ -228,7 +227,7 @@ internal sealed class SaberSenseModelController : SaberModelController, IColorab
         var blurPresence = vis[ViewFeature.MotionBlur];
         if (!vis.MotionBlurActive || !blurPresence.Any()) return;
 
-        _activeSaber.CreateMotionBlur(_pluginConfig.MotionBlur.Strength);
+        _activeSaber.CreateMotionBlur(_settings.MotionBlur.Strength);
         _activeSaber.RefreshMotionBlurColors();
         ApplyMotionBlurVisibility(_activeSaber, blurPresence);
 
@@ -236,7 +235,7 @@ internal sealed class SaberSenseModelController : SaberModelController, IColorab
         {
             if (s != null && s != _activeSaber)
             {
-                s.CreateMotionBlur(_pluginConfig.MotionBlur.Strength);
+                s.CreateMotionBlur(_settings.MotionBlur.Strength);
                 s.RefreshMotionBlurColors();
                 ApplyMotionBlurVisibility(s, blurPresence);
             }
@@ -244,10 +243,10 @@ internal sealed class SaberSenseModelController : SaberModelController, IColorab
     }
 
     private static void ApplyVisibility(GameObject go, ViewPresence presence, bool keepActiveForTrails = false)
-        => ViewVisibilityService.ApplyVisibility(go, presence.Hmd(), presence.Desktop(), keepActiveForTrails, VisibilityLayer.Saber);
+    => ViewVisibilityService.ApplyVisibility(go, presence.Hmd(), presence.Desktop(), keepActiveForTrails, VisibilityLayer.Saber);
 
     private static void ApplyVisibility(GameObject go, bool hmd, bool desk, bool keepActiveForTrails = false)
-        => ViewVisibilityService.ApplyVisibility(go, hmd, desk, keepActiveForTrails, VisibilityLayer.Saber);
+    => ViewVisibilityService.ApplyVisibility(go, hmd, desk, keepActiveForTrails, VisibilityLayer.Saber);
 
     private static void ApplyTrailVisibility(LiveSaber saber, ViewPresence trail)
     {

@@ -28,7 +28,7 @@ internal sealed class PreviewBloom : MonoBehaviour
         if (_blurRenderer == null) return;
 
         var field = typeof(KawaseBlurRendererSO).GetField(
-            "_additiveMaterial", BindingFlags.NonPublic | BindingFlags.Instance);
+        "_additiveMaterial", BindingFlags.NonPublic | BindingFlags.Instance);
         _additiveMaterial = field?.GetValue(_blurRenderer) as Material;
     }
 
@@ -55,15 +55,15 @@ internal sealed class PreviewBloom : MonoBehaviour
         }
 
         var bloomTex = RenderTexture.GetTemporary(512, 512, 0,
-            RenderTextureFormat.RGB111110Float, RenderTextureReadWrite.Linear);
+        RenderTextureFormat.RGB111110Float, RenderTextureReadWrite.Linear);
 
         _blurRenderer.Bloom(src, bloomTex,
-            0,
-            4,
-            0f,
-            1f,
-            KawaseBlurRendererSO.WeightsType.AlphaWeights,
-            null
+        0,
+        4,
+        0f,
+        1f,
+        KawaseBlurRendererSO.WeightsType.AlphaWeights,
+        null
         );
 
         Graphics.Blit(src, dest);

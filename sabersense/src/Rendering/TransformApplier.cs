@@ -6,16 +6,13 @@ using UnityEngine;
 
 namespace SaberSense.Rendering;
 
-internal abstract class TransformBlockHandler { }
-
-internal class SaberAssetTransformHandler : TransformBlockHandler
+internal class SaberAssetTransformHandler
 {
-    public readonly TransformApplier? Applier;
+    public readonly TransformApplier Applier;
 
-    public SaberAssetTransformHandler(GameObject target, TransformOverrides? overrides)
+    public SaberAssetTransformHandler(GameObject target, TransformOverrides overrides)
     {
-        if (overrides is not null)
-            Applier = new(target, overrides);
+        Applier = new(target, overrides);
     }
 }
 
@@ -56,10 +53,11 @@ internal class TransformApplier
 
     private void ApplyWidth(float value)
     {
+        value = SaberScale.Clamp(value);
         _pivot.localScale = new Vector3(
-            _originalScale.x * value,
-            _originalScale.y * value,
-            _originalScale.z);
+        _originalScale.x * value,
+        _originalScale.y * value,
+        _originalScale.z);
         _overrides.Scale = value;
     }
 

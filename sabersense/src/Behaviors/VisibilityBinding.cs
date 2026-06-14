@@ -2,9 +2,8 @@
 // Licensed under the SaberSense Proprietary License. See LICENSE file in the project root.
 
 using Newtonsoft.Json.Linq;
-using SaberSense.Catalog.Data;
+using SaberSense.Persistence;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 
 namespace SaberSense.Behaviors;
 
@@ -40,42 +39,49 @@ internal sealed class VisibilityBinding : ModifierBinding
 
         _sources.RemoveAll(s => s?.Targets is null || (s.Targets.Count is > 0 && s.Targets[0] == null));
         if (!_sources.Contains(rule))
-            _sources.Add(rule);
+        _sources.Add(rule);
         SetActiveSingle(rule, _shown);
     }
 
     public override void Reset() => Visible = _sources.Count is > 0
-        ? _sources[0].IsVisibleByDefault
-        : _defaultVisible;
+    ? _sources[0].IsVisibleByDefault
+    : _defaultVisible;
 
-    public override Task FromJson(JObject obj, IJsonProvider jsonProvider)
+    public override void ReadFrom(JObject obj, IJsonProvider jsonProvider)
     {
         if (obj is not null && obj.TryGetValue(nameof(Visible), out var tok))
-            Visible = tok.ToObject<bool>();
-        return Task.CompletedTask;
+        Visible = tok.ToObject<bool>();
     }
 
-    public override Task<JToken> ToJson(IJsonProvider jsonProvider) =>
-        Task.FromResult<JToken>(new JObject { { nameof(Visible), Visible } });
+    public override JToken WriteTo(IJsonProvider jsonProvider) =>
+    new JObject { { nameof(Visible), Visible } };
 
     public override void Update() { }
 
     public override void Sync(object otherMod)
     {
         if (otherMod is VisibilityBinding peer)
-            Visible = peer.Visible;
+        Visible = peer.Visible;
+    }
+
+    public override IEnumerable<ModifierParam> DescribeEditor(JObject? modJson, IJsonProvider jsonProvider)
+    {
+        yield return ModifierParam.Boolean(
+        Name,
+        () => modJson?[nameof(Visible)]?.ToObject<bool>() ?? Visible,
+        value => Visible = value);
     }
 
     private void SetActive(bool show)
     {
         foreach (var source in _sources)
-            SetActiveSingle(source, show);
+        SetActiveSingle(source, show);
     }
 
     private static void SetActiveSingle(VisibilityRule source, bool show)
     {
         if (source?.Targets is null) return;
         foreach (var go in source.Targets)
-            if (go != null) go.SetActive(show);
+        if (go != null) go.SetActive(show);
     }
 }

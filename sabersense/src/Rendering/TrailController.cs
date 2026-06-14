@@ -13,13 +13,13 @@ internal sealed class TrailController
     public ITrailDriver? PrimaryHandler { get; private set; }
 
     private readonly LiveSaber _saber;
-    private readonly ModSettings _trailConfig;
+    private readonly TrailConfig _trailConfig;
     private List<SecondaryTrailDriver>? _extraTrails;
 
-    public TrailController(LiveSaber saber, ModSettings trailRenderingOptions)
+    public TrailController(LiveSaber saber, TrailConfig trailConfig)
     {
         _saber = saber;
-        _trailConfig = trailRenderingOptions;
+        _trailConfig = trailConfig;
     }
 
     public void Activate(bool editorMode, global::SaberTrail fallbackTrail)
@@ -31,16 +31,16 @@ internal sealed class TrailController
             if (fallbackTrail is { })
             {
                 PrimaryHandler = new PrimaryTrailDriver(
-                    _saber.GameObject, fallbackTrail,
-                    _saber.PlayerTransforms);
+                _saber.GameObject, fallbackTrail,
+                _saber.PlayerTransforms);
                 PrimaryHandler.CreateTrail(_trailConfig, editorMode);
             }
             return;
         }
 
         PrimaryHandler = new PrimaryTrailDriver(
-            _saber.GameObject, _saber.PlayerTransforms);
-        PrimaryHandler.SetTrailData(layout.Primary);
+        _saber.GameObject, _saber.PlayerTransforms);
+        PrimaryHandler.SetLiveTrail(layout.Primary);
         PrimaryHandler.CreateTrail(_trailConfig, editorMode);
 
         if (layout.AuxMarkers is { Count: > 0 })
@@ -49,7 +49,7 @@ internal sealed class TrailController
             foreach (var ct in layout.AuxMarkers)
             {
                 var handler = new SecondaryTrailDriver(
-                    _saber.GameObject, ct, _saber.PlayerTransforms);
+                _saber.GameObject, ct, _saber.PlayerTransforms);
                 handler.CreateTrail(_trailConfig, editorMode);
                 _extraTrails.Add(handler);
             }
@@ -63,6 +63,9 @@ internal sealed class TrailController
         foreach (var trail in _extraTrails) trail.DestroyTrail();
         _extraTrails = null;
     }
+
+    public void DisposePrimaryMaterialIfOrphaned(MaterialHandle? currentCustomizationMaterial)
+    => PrimaryHandler?.DisposeOwnedMaterialIfOrphaned(currentCustomizationMaterial);
 
     public void TintSecondaryTrails(Color color)
     {

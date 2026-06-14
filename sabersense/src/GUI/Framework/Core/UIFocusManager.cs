@@ -12,7 +12,6 @@ internal sealed class UIFocusManager
     public static UIFocusManager Instance => _instance ??= new();
 
     private readonly Stack<UIElement> _modalStack = new();
-    private UIElement? _focusedControl;
 
     private UIFocusManager() { }
 
@@ -25,15 +24,24 @@ internal sealed class UIFocusManager
     public void PopModal(UIElement modal)
     {
         if (_modalStack.Count is > 0 && _modalStack.Peek() == modal)
-            _modalStack.Pop();
+        _modalStack.Pop();
     }
 
     public bool HasActiveModal => _modalStack.Count is > 0;
 
     public UIElement? TopModal => _modalStack.Count is > 0 ? _modalStack.Peek() : null;
 
+    public void Reset() => _modalStack.Clear();
+
     public bool IsInputBlocked(UIElement target)
     {
+        while (_modalStack.Count > 0)
+        {
+            var top = _modalStack.Peek();
+            if (top.IsDisposed || top.GameObject == null) _modalStack.Pop();
+            else break;
+        }
+
         if (_modalStack.Count is 0 || target is null) return false;
 
         var topModal = _modalStack.Peek();
@@ -44,25 +52,5 @@ internal sealed class UIFocusManager
             return !target.GameObject.transform.IsChildOf(topModal.GameObject.transform);
         }
         return true;
-    }
-
-    public UIElement? FocusedControl => _focusedControl;
-
-    public void SetFocus(UIElement control)
-    {
-        if (_focusedControl == control) return;
-        _focusedControl = control;
-    }
-
-    public void ClearFocus(UIElement control)
-    {
-        if (_focusedControl == control)
-            _focusedControl = null;
-    }
-
-    public void Reset()
-    {
-        _modalStack.Clear();
-        _focusedControl = null;
     }
 }

@@ -1,11 +1,14 @@
 // Copyright (c) 2026 dylanhook. All rights reserved.
 // Licensed under the SaberSense Proprietary License. See LICENSE file in the project root.
 
+using SaberSense.Catalog.Model;
+using SaberSense.Core;
 using SaberSense.Core.Logging;
 using SaberSense.Core.Messaging;
+using SaberSense.Loadout;
 using SaberSense.Profiles;
 using SaberSense.Rendering;
-using SaberSense.Services;
+using SaberSense.Rendering.Materials;
 using System;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -13,8 +16,6 @@ using UnityEngine;
 namespace SaberSense.Customization;
 internal sealed class PreviewSession : IDisposable
 {
-    public AssetTypeTag TargetRendererId { get; }
-
     public SaberPair Sabers { get; } = new();
 
     private bool _suspended;
@@ -31,7 +32,7 @@ internal sealed class PreviewSession : IDisposable
 
     private readonly IModLogger _logger;
     private readonly LiveSaber.Factory _liveSaberCreator;
-    private readonly SaberLoadout _saberSet;
+    private readonly SaberLoadout _loadout;
     private readonly LoadoutCoordinator _coordinator;
     private readonly SharedMaterialPool _materialPool;
 
@@ -39,27 +40,26 @@ internal sealed class PreviewSession : IDisposable
     private readonly IMessageBroker _broker;
 
     public PreviewSession(
-        IModLogger logger,
-        SaberLoadout saberSet,
-        LiveSaber.Factory liveSaberCreator,
-        LoadoutCoordinator coordinator,
-        IMessageBroker broker,
-        SharedMaterialPool materialPool)
+    IModLogger logger,
+    SaberLoadout loadout,
+    LiveSaber.Factory liveSaberCreator,
+    LoadoutCoordinator coordinator,
+    IMessageBroker broker,
+    SharedMaterialPool materialPool)
     {
         _logger = logger.ForSource(nameof(PreviewSession));
-        _saberSet = saberSet;
+        _loadout = loadout;
         _liveSaberCreator = liveSaberCreator;
         _coordinator = coordinator;
         _broker = broker;
         _materialPool = materialPool;
-        TargetRendererId = AssetTypeTag.SaberAsset;
 
-        _onPreviewSaberChanged = composition =>
+        _onPreviewSaberChanged = entry =>
         {
-            if (composition == ActiveEntry)
-                Reload();
+            if (entry == ActiveEntry)
+            Reload();
             else
-                SelectEntry(composition);
+            SelectEntry(entry);
         };
 
         _previewChangedSub = broker?.Subscribe<PreviewSaberChangedMsg>(msg => _onPreviewSaberChanged(msg.Entry));
@@ -73,32 +73,27 @@ internal sealed class PreviewSession : IDisposable
         _previewChangedSub?.Dispose();
     }
 
-    public event Action<LiveSaber>? OnSaberSpawned;
-    public event Action<PieceRenderer>? OnRendererReady;
-
     public void SelectEntry(SaberAssetEntry entry)
-        => SelectEntryInternal(entry, EquipSource.UserSelection);
+    => SelectEntryInternal(entry, EquipSource.UserSelection);
 
     public void SelectRestoredEntry(SaberAssetEntry entry)
-        => SelectEntryInternal(entry, EquipSource.ConfigRestore);
+    => SelectEntryInternal(entry, EquipSource.ConfigRestore);
 
     private void SelectEntryInternal(SaberAssetEntry entry, EquipSource source)
     {
         if (entry == ActiveEntry) return;
         _logger.Debug($"{source}: '{ActiveEntry?.DisplayName}' -> '{entry?.DisplayName}'");
-        entry?.EnsureViewed();
         TeardownCurrent();
         ActiveEntry = entry;
         if (entry is not null)
-            Core.Utilities.ErrorBoundary.FireAndForget(
-                ActivateNewAsync(entry, source), _logger, $"{nameof(PreviewSession)}.{source}");
+        Core.Utilities.ErrorBoundary.FireAndForget(
+        ActivateNewAsync(entry, source), _logger, $"{nameof(PreviewSession)}.{source}");
     }
 
     private void TeardownCurrent()
     {
         if (ActiveEntry is null) return;
         _logger.Debug($"TeardownCurrent: '{ActiveEntry.DisplayName}'");
-        ActiveEntry.PersistAuxData();
         ActiveEntry.DestroyAuxObjects();
     }
 
@@ -116,7 +111,7 @@ internal sealed class PreviewSession : IDisposable
     public void ResetEditorReady()
     {
         if (_editorReadyTcs.Task.IsCompleted)
-            _editorReadyTcs = new();
+        _editorReadyTcs = new();
     }
 
     public void Reload()
@@ -132,7 +127,7 @@ internal sealed class PreviewSession : IDisposable
     public void SynchronizeScale()
     {
         if (FocusedSaber is null) return;
-        _saberSet.SyncDimensions(FocusedSaber.Profile);
+        _loadout.SyncDimensions(FocusedSaber.Profile);
     }
 
     internal static readonly Vector3 StashPosition = new(0, -2000, 0);
@@ -140,22 +135,19 @@ internal sealed class PreviewSession : IDisposable
     public async Task SpawnPairAsync(SaberLoadout loadout, Transform? leftParent, Transform? rightParent)
     {
         _logger.Debug($"SpawnPair: leftParent={(leftParent != null ? leftParent.name : "null")} rightParent={(rightParent != null ? rightParent.name : "null")}");
-        _materialPool.Clear();
-        Sabers.Left = _liveSaberCreator.Create(loadout.Left);
+        _materialPool.Clear(MaterialPoolOwner.Menu);
+        Sabers.Left = _liveSaberCreator.Create(loadout.Left, MaterialPoolOwner.Menu);
         if (leftParent != null) Sabers.Left.SetParent(leftParent);
         else Sabers.Left.CachedTransform.position = StashPosition;
 
         await Task.Yield();
 
-        Sabers.Right = _liveSaberCreator.Create(loadout.Right);
+        Sabers.Right = _liveSaberCreator.Create(loadout.Right, MaterialPoolOwner.Menu);
         if (rightParent != null) Sabers.Right.SetParent(rightParent);
         else Sabers.Right.CachedTransform.position = StashPosition;
 
-        ActiveRenderer = ResolveRenderer(TargetRendererId);
+        ActiveRenderer = FocusedSaber?.Renderer;
     }
-
-    public void NotifySaberReady() => OnSaberSpawned?.Invoke(FocusedSaber!);
-    public void NotifyRendererReady() => OnRendererReady?.Invoke(ActiveRenderer!);
 
     public void WipePreviews()
     {
@@ -183,23 +175,20 @@ internal sealed class PreviewSession : IDisposable
     }
 
     public bool CanResume =>
-        _suspended
-        && ActiveEntry is not null
-        && !ActiveEntry.IsAssetStale
-        && Sabers.Left is not null && Sabers.Left.GameObject
-        && Sabers.Right is not null && Sabers.Right.GameObject;
+    _suspended
+    && ActiveEntry is not null
+    && !ActiveEntry.IsAssetStale
+    && Sabers.Left is not null && Sabers.Left.GameObject
+    && Sabers.Right is not null && Sabers.Right.GameObject;
 
     public void ResumePreviews()
     {
         if (!_suspended) return;
         Sabers.Left?.GameObject?.SetActive(true);
         Sabers.Right?.GameObject?.SetActive(true);
-        ActiveRenderer = ResolveRenderer(TargetRendererId);
+        ActiveRenderer = FocusedSaber?.Renderer;
         _suspended = false;
     }
 
-    internal void RefreshActiveRenderer() => ActiveRenderer = ResolveRenderer(TargetRendererId);
-
-    public PieceRenderer? ResolveRenderer(AssetTypeTag definition) =>
-        FocusedSaber is not null && FocusedSaber.Pieces.TryGet(definition, out var piece) ? piece : null;
+    internal void RefreshActiveRenderer() => ActiveRenderer = FocusedSaber?.Renderer;
 }

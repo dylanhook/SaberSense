@@ -1,7 +1,7 @@
 // Copyright (c) 2026 dylanhook. All rights reserved.
 // Licensed under the SaberSense Proprietary License. See LICENSE file in the project root.
 
-using SaberSense.Profiles;
+using SaberSense.Core;
 using SaberSense.Rendering;
 using SaberSense.Rendering.TrailGeometry;
 using System;
@@ -15,7 +15,7 @@ internal sealed class SaberPair
     public LiveSaber? Right { get; set; }
 
     public LiveSaber? this[SaberHand hand]
-        => hand == SaberHand.Left ? Left : Right;
+    => hand == SaberHand.Left ? Left : Right;
 
     public void ForEach(Action<LiveSaber> action)
     {
@@ -29,10 +29,10 @@ internal sealed class SaberPair
         LiveSaber.WithTransformApplier(Right, action);
     }
 
-    public void ForEachTrailData(Action<TrailSnapshot> action)
+    public void ForEachLiveTrail(Action<LiveTrail> action)
     {
-        LiveSaber.WithTrailData(Left, action);
-        LiveSaber.WithTrailData(Right, action);
+        LiveSaber.WithLiveTrail(Left, action);
+        LiveSaber.WithLiveTrail(Right, action);
     }
 
     public void Clear()

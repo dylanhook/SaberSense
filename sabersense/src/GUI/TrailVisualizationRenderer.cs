@@ -2,6 +2,7 @@
 // Licensed under the SaberSense Proprietary License. See LICENSE file in the project root.
 
 using SaberSense.Core.Utilities;
+using SaberSense.Rendering;
 using SaberSense.Rendering.TrailGeometry;
 using System;
 using System.Collections.Generic;
@@ -45,16 +46,16 @@ internal sealed class TrailVisualizationRenderer : IDisposable
             name = "TrailPlaneMesh",
 
             vertices = [
-                new Vector3(0, 0, -1),
-                new Vector3(0, 0, 0),
-                new Vector3(-1, 0, 0),
-                new Vector3(-1, 0, -1)
+            new Vector3(0, 0, -1),
+            new Vector3(0, 0, 0),
+            new Vector3(-1, 0, 0),
+            new Vector3(-1, 0, -1)
             ],
             uv = [
-                new Vector2(1, 0),
-                new Vector2(0, 0),
-                new Vector2(0, 1),
-                new Vector2(1, 1)
+            new Vector2(1, 0),
+            new Vector2(0, 0),
+            new Vector2(0, 1),
+            new Vector2(1, 1)
             ],
             triangles = [2, 1, 0, 3, 2, 0],
             normals = [Vector3.up, Vector3.up, Vector3.up, Vector3.up]
@@ -69,19 +70,19 @@ internal sealed class TrailVisualizationRenderer : IDisposable
         return (go, mesh, mat);
     }
 
-    public void Create(Transform parent, TrailSnapshot data, bool baseColorOnly)
+    public void Create(Transform parent, LiveTrail trail, bool baseColorOnly)
     {
         foreach (var s in _sections) s.Destroy();
         _sections.Clear();
         if (_prefab == null) return;
 
-        var (start, end) = data.GetPoints();
+        var (start, end) = trail.GetPoints();
 
         _sections.Add(new TrailSegmentMesh(0, parent, start, end, _prefab, _rotationBaseline) { OnlyColorVertex = baseColorOnly });
 
-        for (var i = 0; i < data.AuxTrails.Count; i++)
+        for (var i = 0; i < trail.AuxTrails.Count; i++)
         {
-            var sec = data.AuxTrails[i];
+            var sec = trail.AuxTrails[i];
             if (sec.Trail.PointStart && sec.Trail.PointEnd)
             {
                 _sections.Add(new TrailSegmentMesh(i + 1, parent, sec.Trail.PointStart!, sec.Trail.PointEnd!, _prefab, _rotationBaseline, sec)
@@ -91,8 +92,8 @@ internal sealed class TrailVisualizationRenderer : IDisposable
             }
         }
 
-        Material = data.Material!.Material!;
-        Length = data.Length;
+        Material = trail.Material!.Material!;
+        Length = trail.Length;
         UpdateWidth();
     }
 
@@ -158,20 +159,20 @@ internal sealed class TrailVisualizationRenderer : IDisposable
         private readonly Transform _ptEnd;
         private readonly Transform _ptStart;
         private readonly Renderer _renderer = null!;
-        private readonly TrailSnapshot.AuxTrailBinding? _handler;
+        private readonly LiveTrail.AuxTrailBinding? _handler;
         private readonly Transform _tx;
 
         private readonly Vector3[] _vertices = new Vector3[4];
         private readonly Color[] _colors = new Color[4];
 
         public TrailSegmentMesh(
-            int idx,
-            Transform parent,
-            Transform pointStart,
-            Transform pointEnd,
-            GameObject prefab,
-            RotationBaseline baseline,
-            TrailSnapshot.AuxTrailBinding? handler = null)
+        int idx,
+        Transform parent,
+        Transform pointStart,
+        Transform pointEnd,
+        GameObject prefab,
+        RotationBaseline baseline,
+        LiveTrail.AuxTrailBinding? handler = null)
         {
             TrailIdx = idx;
             _handler = handler;
@@ -184,9 +185,9 @@ internal sealed class TrailVisualizationRenderer : IDisposable
             _tx = _instance.transform;
 
             if (!baseline.Value.HasValue)
-                baseline.Value = _tx.localRotation;
+            baseline.Value = _tx.localRotation;
             else
-                _tx.localRotation = baseline.Value.Value;
+            _tx.localRotation = baseline.Value.Value;
 
             _renderer = _instance.GetComponentInChildren<Renderer>()!;
             var meshFilter = _instance.GetComponentInChildren<MeshFilter>();

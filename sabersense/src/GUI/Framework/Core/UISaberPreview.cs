@@ -129,7 +129,7 @@ public class UISaberPreview : UIElement
         if (LiveSaber?.GameObject == null) return;
 
         for (int i = _saberHost.childCount - 1; i >= 0; i--)
-            _saberHost.GetChild(i).SetParent(null, false);
+        _saberHost.GetChild(i).SetParent(null, false);
 
         _saberHost.localPosition = Vector3.zero;
         _saberHost.localScale = new Vector3(PreviewWidthBoost, PreviewWidthBoost, 1f);
@@ -149,7 +149,7 @@ public class UISaberPreview : UIElement
 
         var renderers = LiveSaber.GameObject.GetComponentsInChildren<Renderer>(true);
         foreach (var r in renderers)
-            r.gameObject.layer = SaberLayer;
+        r.gameObject.layer = SaberLayer;
 
         Bounds bounds = default;
         bool init = false;
@@ -225,7 +225,6 @@ public class UISaberPreview : UIElement
         {
             OnDragStarted?.Invoke();
         }
-
         else if (!isDragging && _wasDragging)
         {
             OnDragEnded?.Invoke();
@@ -260,7 +259,7 @@ public class UISaberPreview : UIElement
                     _currentRotation = Quaternion.AngleAxis(_rotationSpeed * dt, Vector3.up) * _currentRotation;
 
                     _currentRotation = Quaternion.Slerp(_currentRotation,
-                        ExtractYaw(_currentRotation), dt * PitchStraightenRate);
+                    ExtractYaw(_currentRotation), dt * PitchStraightenRate);
                 }
                 else
                 {
@@ -294,7 +293,7 @@ public class UISaberPreview : UIElement
     {
         if (_saberHost == null) return;
         foreach (var trail in _saberHost.GetComponentsInChildren<SaberSense.Rendering.SaberTrail>(true))
-            trail.enabled = _displayTrails;
+        trail.enabled = _displayTrails;
     }
 
     public Sprite? CaptureSnapshot(int size = 128)

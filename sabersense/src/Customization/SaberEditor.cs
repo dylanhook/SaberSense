@@ -1,11 +1,14 @@
 // Copyright (c) 2026 dylanhook. All rights reserved.
 // Licensed under the SaberSense Proprietary License. See LICENSE file in the project root.
 
+using SaberSense.App;
+using SaberSense.Catalog.Model;
 using SaberSense.Configuration;
 using SaberSense.Core;
 using SaberSense.Core.Logging;
 using SaberSense.Core.Messaging;
 using SaberSense.Core.Utilities;
+using SaberSense.Loadout;
 using SaberSense.Profiles;
 using SaberSense.Rendering;
 using SaberSense.Services;
@@ -16,13 +19,79 @@ using UnityEngine;
 
 namespace SaberSense.Customization;
 
-internal sealed class SaberEditor : IDisposable, Core.IEditorDeactivator
+internal sealed partial class SaberEditor : IDisposable, IEditorDeactivator
 {
     public bool IsActive => _session.IsEditing;
 
     public bool GrabLeft { get; private set; }
 
     public bool GrabRight { get; private set; }
+
+    public bool IsSaberInHand => GrabLeft || GrabRight;
+
+    public bool IsLoadoutEmpty => _loadout.IsEmpty;
+
+    public SaberAssetEntry? LoadoutEntry
+    {
+        get
+        {
+            if (_loadout.Left.TryGetSaberAsset(out var sa) && sa?.OwnerEntry is not null)
+            return sa.OwnerEntry;
+            return null;
+        }
+    }
+
+    private const int PreviewCameraLayer = 12;
+    private const int InvisibleLayer = 31;
+
+    private readonly PreviewSession _previewSession;
+    private readonly PlayerDataModel _playerDataModel;
+    private readonly ModSettings _settings;
+    private readonly GripAttachment _grip;
+    private readonly SaberLoadout _loadout;
+    private readonly IConfigStore _configManager;
+    private readonly SessionController _session;
+    private readonly IMessageBroker _broker;
+    private readonly SaberSense.GUI.TrailVisualizationRenderer _trailPreviewer;
+    private readonly EditScope _editScope;
+    private readonly IModLogger _log;
+
+    private IDisposable? _trailSettingsSub;
+    private IDisposable? _trailMatEditSub;
+    private IDisposable? _equippedSub;
+    private IDisposable? _configLoadingSub;
+    private IDisposable? _configLoadedSub;
+    private CancellationTokenSource? _animationCts;
+    private CancellationTokenSource? _spawnCts;
+    private volatile bool _isResuming;
+
+    private volatile bool _isDraggingPreview;
+
+    private SaberEditor(
+    ModSettings settings,
+    PreviewSession previewSession,
+    SaberLoadout loadout,
+    IConfigStore configManager,
+    SessionController session,
+    PlayerDataModel playerDataModel,
+    GripAttachment gripAttachment,
+    IMessageBroker broker,
+    SaberSense.GUI.TrailVisualizationRenderer trailPreviewer,
+    EditScope editScope,
+    IModLogger log)
+    {
+        _settings = settings;
+        _previewSession = previewSession;
+        _loadout = loadout;
+        _configManager = configManager;
+        _session = session;
+        _playerDataModel = playerDataModel;
+        _grip = gripAttachment;
+        _broker = broker;
+        _trailPreviewer = trailPreviewer;
+        _editScope = editScope;
+        _log = log.ForSource(nameof(SaberEditor));
+    }
 
     public void SetGrab(bool left, bool right)
     {
@@ -36,74 +105,16 @@ internal sealed class SaberEditor : IDisposable, Core.IEditorDeactivator
         if (wasRight && !right) _grip.SetGripVisible(SaberHand.Right, true);
 
         if (!IsLoadoutEmpty)
-            _previewSession.Reload();
-    }
-
-    public bool IsSaberInHand => GrabLeft || GrabRight;
-
-    public bool IsLoadoutEmpty => _saberSet.IsEmpty;
-
-    public SaberAssetEntry? LoadoutEntry
-    {
-        get
-        {
-            if (_saberSet.Left.TryGetSaberAsset(out var sa) && sa?.OwnerEntry is not null)
-                return sa.OwnerEntry;
-            return null;
-        }
-    }
-
-    private const int PreviewCameraLayer = 12;
-    private const int InvisibleLayer = 31;
-
-    private readonly PreviewSession _previewSession;
-    private readonly MenuSaberSpawner _menuSaberProvider;
-    private readonly PlayerDataModel _playerDataModel;
-    private readonly ModSettings _pluginConfig;
-    private readonly GripAttachment _grip;
-    private readonly SaberLoadout _saberSet;
-    private readonly ConfigManager _configManager;
-    private readonly SessionController _session;
-    private readonly IMessageBroker _broker;
-    private readonly SaberSense.GUI.TrailVisualizationRenderer _trailPreviewer;
-    private readonly EditScope _editScope;
-    private readonly IModLogger _log;
-
-    private SaberEditor(
-        ModSettings config,
-        PreviewSession previewSession,
-        SaberLoadout saberSet,
-        ConfigManager configManager,
-        SessionController session,
-        PlayerDataModel playerDataModel,
-        GripAttachment gripAttachment,
-        MenuSaberSpawner menuSaberProvider,
-        IMessageBroker broker,
-        SaberSense.GUI.TrailVisualizationRenderer trailPreviewer,
-        EditScope editScope,
-        IModLogger log)
-    {
-        _pluginConfig = config;
-        _previewSession = previewSession;
-        _saberSet = saberSet;
-        _configManager = configManager;
-        _session = session;
-        _playerDataModel = playerDataModel;
-        _grip = gripAttachment;
-        _menuSaberProvider = menuSaberProvider;
-        _broker = broker;
-        _trailPreviewer = trailPreviewer;
-        _editScope = editScope;
-        _log = log.ForSource(nameof(SaberEditor));
+        _previewSession.Reload();
     }
 
     public void Dispose()
     {
         if (_previewSession.CanResume)
-            _previewSession.WipePreviews();
+        _previewSession.WipePreviews();
 
-        if (Core.Patches.HarmonyBridge.Editor == this)
-            Core.Patches.HarmonyBridge.Editor = null;
+        if (Patches.HarmonyBridge.Editor == this)
+        Patches.HarmonyBridge.Editor = null;
         CancelSpawn();
         CancelAnimation();
         _equippedSub?.Dispose();
@@ -112,15 +123,6 @@ internal sealed class SaberEditor : IDisposable, Core.IEditorDeactivator
         _configLoadingSub?.Dispose();
         _configLoadedSub?.Dispose();
     }
-
-    private IDisposable? _trailSettingsSub;
-    private IDisposable? _trailMatEditSub;
-    private IDisposable? _equippedSub;
-    private IDisposable? _configLoadingSub;
-    private IDisposable? _configLoadedSub;
-    private CancellationTokenSource? _animationCts;
-    private CancellationTokenSource? _spawnCts;
-    private volatile bool _isResuming;
 
     private void CancelSpawn()
     {
@@ -156,7 +158,7 @@ internal sealed class SaberEditor : IDisposable, Core.IEditorDeactivator
         {
             if (_isResuming) return;
             if (_session.Phase == SessionPhase.LoadingConfig
-                && msg.Source != EquipSource.ConfigRestore) return;
+            && msg.Source != EquipSource.ConfigRestore) return;
             OnEntrySelected(msg.Entry);
         });
         _trailSettingsSub = _broker?.Subscribe<TrailSettingsChangedMsg>(_ => RecreatePreviewTrails());
@@ -177,7 +179,6 @@ internal sealed class SaberEditor : IDisposable, Core.IEditorDeactivator
             _previewSession.WipePreviews();
             _grip.SetGripVisible(SaberHand.Left, true);
             _grip.SetGripVisible(SaberHand.Right, true);
-            _menuSaberProvider.SetMenuSaberVisible(true);
         }
         catch (Exception ex)
         {
@@ -194,8 +195,6 @@ internal sealed class SaberEditor : IDisposable, Core.IEditorDeactivator
         RestoreGrabStateFromConfig();
 
         _previewSession.ResetEditorReady();
-
-        _menuSaberProvider.SetMenuSaberVisible(false);
 
         if (_previewSession.CanResume && LoadoutEntry == _previewSession.ActiveEntry)
         {
@@ -232,7 +231,7 @@ internal sealed class SaberEditor : IDisposable, Core.IEditorDeactivator
 
             if (_previewSession.ActiveEntry is null)
             {
-                if (_saberSet.Left.TryGetSaberAsset(out var saberAsset) && saberAsset!.OwnerEntry is not null)
+                if (_loadout.Left.TryGetSaberAsset(out var saberAsset) && saberAsset!.OwnerEntry is not null)
                 {
                     _log.Debug($"ActivateEditorAsync: selecting restored entry '{saberAsset.OwnerEntry.DisplayName}'");
                     _previewSession.SelectRestoredEntry(saberAsset.OwnerEntry);
@@ -244,8 +243,8 @@ internal sealed class SaberEditor : IDisposable, Core.IEditorDeactivator
             }
             else
             {
-                if (_saberSet.Left.TryGetSaberAsset(out var sa) && sa?.OwnerEntry is not null
-                    && sa.OwnerEntry != _previewSession.ActiveEntry)
+                if (_loadout.Left.TryGetSaberAsset(out var sa) && sa?.OwnerEntry is not null
+                && sa.OwnerEntry != _previewSession.ActiveEntry)
                 {
                     _log.Debug($"ActivateEditorAsync: re-resolving refreshed entry '{sa.OwnerEntry.DisplayName}'");
                     _previewSession.SelectRestoredEntry(sa.OwnerEntry);
@@ -293,11 +292,9 @@ internal sealed class SaberEditor : IDisposable, Core.IEditorDeactivator
             await Task.Yield();
             if (!IsActive) return;
 
-            _previewSession.NotifySaberReady();
-            _previewSession.NotifyRendererReady();
             _broker?.Publish(new SaberPreviewInstantiatedMsg(
-                sabers[_previewSession.FocusedHand]!,
-                _previewSession.FocusedHand));
+            sabers[_previewSession.FocusedHand]!,
+            _previewSession.FocusedHand));
         }
         finally
         {
@@ -318,7 +315,6 @@ internal sealed class SaberEditor : IDisposable, Core.IEditorDeactivator
             _previewSession.WipePreviews();
             _grip.SetGripVisible(SaberHand.Left, true);
             _grip.SetGripVisible(SaberHand.Right, true);
-            _menuSaberProvider.SetMenuSaberVisible(true);
         }
         catch (System.Exception ex)
         {
@@ -343,7 +339,7 @@ internal sealed class SaberEditor : IDisposable, Core.IEditorDeactivator
         bool wasRight = GrabRight;
         RestoreGrabStateFromConfig();
 
-        if (_saberSet.Left.TryGetSaberAsset(out var sa) && sa?.OwnerEntry is not null)
+        if (_loadout.Left.TryGetSaberAsset(out var sa) && sa?.OwnerEntry is not null)
         {
             _log.Info($"OnConfigLoaded: Resolved entry='{sa.OwnerEntry.DisplayName}', GrabLeft={GrabLeft}, GrabRight={GrabRight}");
             _previewSession.SelectRestoredEntry(sa.OwnerEntry);
@@ -355,28 +351,28 @@ internal sealed class SaberEditor : IDisposable, Core.IEditorDeactivator
         }
     }
 
-    private void OnEntrySelected(SaberAssetEntry composition)
+    private void OnEntrySelected(SaberAssetEntry entry)
     {
         CancelSpawn();
         _spawnCts = new();
-        ErrorBoundary.FireAndForget(OnEntrySelectedAsync(composition, _spawnCts.Token), _log, nameof(OnEntrySelected));
+        ErrorBoundary.FireAndForget(OnEntrySelectedAsync(entry, _spawnCts.Token), _log, nameof(OnEntrySelected));
     }
 
-    private async Task OnEntrySelectedAsync(SaberAssetEntry composition, CancellationToken token)
+    private async Task OnEntrySelectedAsync(SaberAssetEntry entry, CancellationToken token)
     {
         var sabers = _previewSession.Sabers;
-        _log.Debug($"OnEntrySelectedAsync: entry='{composition.DisplayName}' stale={composition.IsAssetStale}");
+        _log.Debug($"OnEntrySelectedAsync: entry='{entry.DisplayName}' stale={entry.IsAssetStale}");
 
-        if (composition.IsAssetStale)
+        if (entry.IsAssetStale)
         {
             await _configManager.EnsureAssetsValidAsync();
             if (token.IsCancellationRequested) return;
 
-            if (_saberSet.Left.TryGetSaberAsset(out var sa) && sa?.OwnerEntry is not null
-                && !sa.OwnerEntry.IsAssetStale)
+            if (_loadout.Left.TryGetSaberAsset(out var sa) && sa?.OwnerEntry is not null
+            && !sa.OwnerEntry.IsAssetStale)
             {
-                composition = sa.OwnerEntry;
-                _previewSession.SelectRestoredEntry(composition);
+                entry = sa.OwnerEntry;
+                _previewSession.SelectRestoredEntry(entry);
                 return;
             }
         }
@@ -388,7 +384,7 @@ internal sealed class SaberEditor : IDisposable, Core.IEditorDeactivator
 
         var leftMount = GrabLeft ? _grip.GetMount(SaberHand.Left) : null;
         var rightMount = GrabRight ? _grip.GetMount(SaberHand.Right) : null;
-        await _previewSession.SpawnPairAsync(_saberSet, leftMount, rightMount);
+        await _previewSession.SpawnPairAsync(_loadout, leftMount, rightMount);
 
         ConfigureHand(SaberHand.Left, GrabLeft, sabers.Left);
         ConfigureHand(SaberHand.Right, GrabRight, sabers.Right);
@@ -402,11 +398,9 @@ internal sealed class SaberEditor : IDisposable, Core.IEditorDeactivator
             return;
         }
 
-        _previewSession.NotifySaberReady();
-        _previewSession.NotifyRendererReady();
         _broker?.Publish(new SaberPreviewInstantiatedMsg(
-            sabers[_previewSession.FocusedHand]!,
-            _previewSession.FocusedHand));
+        sabers[_previewSession.FocusedHand]!,
+        _previewSession.FocusedHand));
 
         await Task.Yield();
         if (!IsActive || token.IsCancellationRequested) return;
@@ -415,7 +409,7 @@ internal sealed class SaberEditor : IDisposable, Core.IEditorDeactivator
         _animationCts?.Dispose();
         _animationCts = new();
         var animToken = _animationCts.Token;
-        if (_pluginConfig.AnimateSelection && IsSaberInHand)
+        if (_settings.AnimateSelection && IsSaberInHand)
         {
             var tasks = new System.Collections.Generic.List<Task>();
             if (GrabLeft && _grip.LeftMount != null)
@@ -470,7 +464,7 @@ internal sealed class SaberEditor : IDisposable, Core.IEditorDeactivator
 
     private void RestoreGrabStateFromConfig()
     {
-        var grabSels = _pluginConfig?.GrabSelections;
+        var grabSels = _settings?.GrabSelections;
         if (grabSels is null) return;
         GrabLeft = grabSels.Contains(0);
         GrabRight = grabSels.Contains(1);
@@ -480,224 +474,5 @@ internal sealed class SaberEditor : IDisposable, Core.IEditorDeactivator
     {
         var scheme = _playerDataModel.playerData.colorSchemesSettings.GetSelectedColorScheme();
         return hand == SaberHand.Left ? scheme.saberAColor : scheme.saberBColor;
-    }
-
-    private void ColorSabers()
-    {
-        _previewSession.Sabers.Left?.SetColor(ColorForHand(SaberHand.Left));
-        _previewSession.Sabers.Right?.SetColor(ColorForHand(SaberHand.Right));
-    }
-
-    private void RecreatePreviewTrails()
-    {
-        if (IsSaberInHand && _isDraggingPreview)
-            RebuildMirrorLiveTrail();
-        else if (IsSaberInHand)
-            SyncGrabbedTrailSettings();
-        else if (_isDraggingPreview)
-            RebuildAllTrails();
-        else
-            RecreateStaticTrailPreview();
-
-        ColorSabers();
-    }
-
-    private void RebuildMirrorLiveTrail()
-    {
-        _log.Debug("RecreatePreviewTrails: drag+grab -> rebuilding mirror live trail");
-        var mirror = _editScope?.PreviewMirror;
-        if (mirror is null) return;
-        _trailPreviewer?.Destroy();
-        mirror.DestroyTrail(true);
-        mirror.CreateTrail(editorMode: true);
-        mirror.SetColor(ColorForHand(_previewSession.FocusedHand));
-    }
-
-    private void SyncGrabbedTrailSettings()
-    {
-        var focusedSnap = (_previewSession.FocusedHand == SaberHand.Left
-            ? _saberSet?.Left : _saberSet?.Right)?.Snapshot?.TrailSettings;
-        if (focusedSnap is not null)
-        {
-            SyncTrailDimensionsTo(_previewSession.Sabers, focusedSnap);
-            SyncTrailDimensionsToMirror(focusedSnap);
-        }
-        RebuildGrabbedTrails();
-        RecreateStaticTrailPreview();
-    }
-
-    private static void SyncTrailDimensionsTo(SaberPair sabers, TrailSettings source)
-    {
-        sabers.ForEachTrailData(td =>
-        {
-            td.Length = source.TrailLength;
-            td.Width = source.TrailWidth;
-            td.WhiteStep = source.WhiteBlend;
-            if (td.Material?.Material is { } liveMat
-                && source.Material?.Material is { } snapMat
-                && liveMat != snapMat)
-                liveMat.CopyPropertiesFromMaterial(snapMat);
-        });
-    }
-
-    private void SyncTrailDimensionsToMirror(TrailSettings source)
-    {
-        var mirror = _editScope?.PreviewMirror;
-        if (mirror is null) return;
-        var mtd = mirror.GetTrailLayout().Primary;
-        if (mtd is null) return;
-        mtd.Length = source.TrailLength;
-        mtd.Width = source.TrailWidth;
-        mtd.WhiteStep = source.WhiteBlend;
-        if (mtd.Material?.Material is { } mirrorMat
-            && source.Material?.Material is { } snapMat
-            && mirrorMat != snapMat)
-            mirrorMat.CopyPropertiesFromMaterial(snapMat);
-    }
-
-    private void PushToGrabSaberTrail(Material mat)
-    {
-        if (mat == null) return;
-        try
-        {
-            _previewSession.Sabers?.ForEachTrailData(td =>
-            {
-                if (td?.TrailSettings?.Material?.Material is { } liveMat && liveMat != mat)
-                    liveMat.CopyPropertiesFromMaterial(mat);
-            });
-        }
-        catch (Exception ex)
-        {
-            _log.Debug($"PushToGrabSaberTrail failed: {ex.Message}");
-        }
-    }
-
-    private void RecreateStaticTrailPreview()
-    {
-        var mirror = _editScope?.PreviewMirror;
-        var displaySaber = mirror ?? _previewSession?.FocusedSaber;
-        var trailData = displaySaber?.GetTrailLayout().Primary;
-        if (trailData is null || _trailPreviewer is null) return;
-
-        var previewHost = displaySaber!.GameObject.transform.parent;
-
-        _trailPreviewer.Create(
-            previewHost,
-            trailData,
-            _pluginConfig?.Trail?.VertexColorOnly ?? true
-        );
-        _trailPreviewer.SetLayer(PreviewCameraLayer);
-
-        try
-        {
-            var hand = _previewSession!.FocusedHand;
-            _trailPreviewer.SetColor(ColorForHand(hand));
-        }
-        catch (Exception ex) { _log.Debug($"PlayerDataModel unavailable: {ex.Message}"); }
-    }
-
-    private void RebuildGrabbedTrails()
-    {
-        var sabers = _previewSession.Sabers;
-        if (GrabLeft && sabers.Left is not null)
-        {
-            sabers.Left.DestroyTrail(true);
-            sabers.Left.CreateTrail(editorMode: true);
-            sabers.Left.SetColor(ColorForHand(SaberHand.Left));
-        }
-        if (GrabRight && sabers.Right is not null)
-        {
-            sabers.Right.DestroyTrail(true);
-            sabers.Right.CreateTrail(editorMode: true);
-            sabers.Right.SetColor(ColorForHand(SaberHand.Right));
-        }
-    }
-
-    private volatile bool _isDraggingPreview;
-
-    public void OnPreviewDragStarted()
-    {
-        _isDraggingPreview = true;
-
-        if (IsSaberInHand)
-        {
-            _trailPreviewer?.SetLayer(InvisibleLayer);
-
-            var mirror = _editScope?.PreviewMirror;
-            if (mirror is null) return;
-
-            if (mirror.TrailHandler is not null)
-            {
-                mirror.SetTrailVisibilityLayer((CameraUtils.Core.VisibilityLayer)PreviewCameraLayer);
-            }
-            else
-            {
-                ErrorBoundary.FireAndForget(DeferredMirrorTrailSetup(), _log, "DragMirrorTrail");
-            }
-        }
-        else
-        {
-            RebuildAllTrails();
-            ColorSabers();
-        }
-    }
-
-    private async Task DeferredMirrorTrailSetup()
-    {
-        await Task.Yield();
-        if (!_isDraggingPreview || !IsSaberInHand) return;
-
-        var mirror = _editScope?.PreviewMirror;
-        if (mirror is null) return;
-
-        mirror.CreateTrail(editorMode: true);
-
-        mirror.SetTrailVisibilityLayer((CameraUtils.Core.VisibilityLayer)PreviewCameraLayer);
-        mirror.SetColor(ColorForHand(_previewSession.FocusedHand));
-    }
-
-    private void RebuildAllTrails()
-    {
-        _trailPreviewer?.Destroy();
-        _previewSession.Sabers.ForEach(saber =>
-        {
-            saber.DestroyTrail(true);
-            saber.CreateTrail(true);
-        });
-    }
-
-    public void OnPreviewDragEnded()
-    {
-        _isDraggingPreview = false;
-
-        if (IsSaberInHand)
-        {
-            var mirror = _editScope?.PreviewMirror;
-            mirror?.SetTrailVisibilityLayer((CameraUtils.Core.VisibilityLayer)InvisibleLayer);
-
-            RecreateStaticTrailPreview();
-        }
-        else
-        {
-            _previewSession.Sabers.ForEach(saber => saber.DestroyTrail(true));
-
-            var focusedHand = _previewSession.FocusedHand;
-            var liveSaber = _previewSession.FocusedSaber;
-            var trailData = liveSaber?.GetTrailLayout().Primary;
-            if (trailData is not null && liveSaber!.TrailHandler is null)
-            {
-                _trailPreviewer.Create(
-                    liveSaber.GameObject.transform.parent,
-                    trailData,
-                    _pluginConfig?.Trail?.VertexColorOnly ?? true
-                );
-                _trailPreviewer.SetLayer(PreviewCameraLayer);
-                try
-                {
-                    _trailPreviewer.SetColor(ColorForHand(focusedHand));
-                }
-                catch (System.Exception ex) { _log.Debug($"PlayerDataModel unavailable: {ex.Message}"); }
-            }
-        }
     }
 }

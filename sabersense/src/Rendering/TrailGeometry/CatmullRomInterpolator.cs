@@ -12,19 +12,21 @@ internal static class CatmullRomInterpolator
         float t2 = t * t;
         float t3 = t2 * t;
         return 0.5f * (
-            (2f * p1) +
-            (-p0 + p2) * t +
-            (2f * p0 - 5f * p1 + 4f * p2 - p3) * t2 +
-            (-p0 + 3f * p1 - 3f * p2 + p3) * t3
+        (2f * p1) +
+        (-p0 + p2) * t +
+        (2f * p0 - 5f * p1 + 4f * p2 - p3) * t2 +
+        (-p0 + 3f * p1 - 3f * p2 + p3) * t3
         );
     }
 
-    public static Vector3 Sample(SnapshotRingBuffer buffer, float t, bool isNormal)
+    public static void Sample(SnapshotRingBuffer buffer, float t, out Vector3 pos, out Vector3 up)
     {
         if (buffer.Count is < 2)
         {
             var snap = buffer.Get(0);
-            return isNormal ? snap.Normal : snap.Pos;
+            pos = snap.Pos;
+            up = snap.Normal;
+            return;
         }
 
         t = Mathf.Clamp01(t);
@@ -35,8 +37,7 @@ internal static class CatmullRomInterpolator
         var s2 = buffer.Get(idx + 1);
         var s3 = buffer.Get(idx + 2);
 
-        return isNormal
-            ? Interpolate(s0.Normal, s1.Normal, s2.Normal, s3.Normal, localT)
-            : Interpolate(s0.Pos, s1.Pos, s2.Pos, s3.Pos, localT);
+        pos = Interpolate(s0.Pos, s1.Pos, s2.Pos, s3.Pos, localT);
+        up = Interpolate(s0.Normal, s1.Normal, s2.Normal, s3.Normal, localT);
     }
 }

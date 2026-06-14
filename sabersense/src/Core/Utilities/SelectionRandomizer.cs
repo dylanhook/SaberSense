@@ -2,19 +2,11 @@
 // Licensed under the SaberSense Proprietary License. See LICENSE file in the project root.
 
 using System.Collections.Generic;
-using System.Linq;
 
 namespace SaberSense.Core.Utilities;
 internal sealed class SelectionRandomizer
 {
     private readonly System.Random _random = new();
-
-    public T? PickRandom<T>(IEnumerable<T> source)
-    {
-        var array = source.ToArray();
-        if (array.Length is 0) return default;
-        return array[_random.Next(array.Length)];
-    }
 
     public T? PickRandom<T>(IList<T> source)
     {

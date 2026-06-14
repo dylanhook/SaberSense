@@ -9,15 +9,17 @@ namespace SaberSense.GUI.Framework.Core;
 
 public static class UITheme
 {
-    public static Color Accent { get; set; } = new(0.62f, 0.79f, 0.16f, 1f);
+    public static readonly Color DefaultAccent = new(0.62f, 0.79f, 0.16f, 1f);
+
+    public static Color Accent { get; set; } = DefaultAccent;
     public static Color AccentHover => new(
-        Mathf.Min(Accent.r + 0.10f, 1f),
-        Mathf.Min(Accent.g + 0.10f, 1f),
-        Mathf.Min(Accent.b + 0.10f, 1f), 1f);
+    Mathf.Min(Accent.r + 0.10f, 1f),
+    Mathf.Min(Accent.g + 0.10f, 1f),
+    Mathf.Min(Accent.b + 0.10f, 1f), 1f);
     public static Color AccentPressed => new(
-        Mathf.Max(Accent.r - 0.10f, 0f),
-        Mathf.Max(Accent.g - 0.10f, 0f),
-        Mathf.Max(Accent.b - 0.06f, 0f), 1f);
+    Mathf.Max(Accent.r - 0.10f, 0f),
+    Mathf.Max(Accent.g - 0.10f, 0f),
+    Mathf.Max(Accent.b - 0.06f, 0f), 1f);
 
     private static readonly List<Graphic> _accentGraphics = [];
 

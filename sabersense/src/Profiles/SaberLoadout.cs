@@ -3,10 +3,11 @@
 
 using Newtonsoft.Json.Linq;
 using SaberSense.Catalog;
-using SaberSense.Catalog.Data;
+using SaberSense.Catalog.Model;
 using SaberSense.Configuration;
+using SaberSense.Core;
 using SaberSense.Core.Logging;
-using SaberSense.Profiles.SaberAsset;
+using SaberSense.Persistence;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -35,12 +36,12 @@ public class SaberLoadout
     internal ModSettings Settings { get; }
 
     internal SaberLoadout(
-        [Inject(Id = SaberHand.Left)] SaberProfile leftProfile,
-        [Inject(Id = SaberHand.Right)] SaberProfile rightProfile,
-        SaberCatalog catalog,
-        ModSettings settings,
-        Serializer serializer,
-        IModLogger log)
+    [Inject(Id = SaberHand.Left)] SaberProfile leftProfile,
+    [Inject(Id = SaberHand.Right)] SaberProfile rightProfile,
+    SaberCatalog catalog,
+    ModSettings settings,
+    Serializer serializer,
+    IModLogger log)
     {
         _catalog = catalog;
         _log = log.ForSource(nameof(SaberLoadout));
@@ -57,8 +58,8 @@ public class SaberLoadout
 
         if (!_isLoadingConfig)
         {
-            await SaveCurrentSettingsAsync(Left);
-            await SaveCurrentSettingsAsync(Right);
+            SaveCurrentSettings(Left);
+            SaveCurrentSettings(Right);
         }
 
         Left.ApplyAssetEntry(entry);
@@ -71,9 +72,9 @@ public class SaberLoadout
         }
     }
 
-    private async Task SaveCurrentSettingsAsync(SaberProfile profile)
+    private void SaveCurrentSettings(SaberProfile profile)
     {
-        if (profile.Snapshot is null) return;
+        if (profile.Customization is null) return;
         if (!profile.TryGetSaberAsset(out var sa)) return;
         var path = sa!.Asset?.RelativePath;
         if (string.IsNullOrEmpty(path)) return;
@@ -81,7 +82,7 @@ public class SaberLoadout
         try
         {
             var obj = new JObject();
-            await profile.Snapshot.WriteTo(obj, _serializer);
+            profile.Customization.WriteTo(obj, _serializer);
             _saberSettings[path!] = obj;
             _log.Debug($"SaveCurrentSettings: saved '{path}' ({profile.Hand})");
         }
@@ -91,18 +92,17 @@ public class SaberLoadout
         }
     }
 
-    private async Task LoadSaberSettingsAsync(SaberProfile profile, PieceDefinition? piece)
+    private async Task LoadSaberSettingsAsync(SaberProfile profile, SaberAssetDefinition? piece)
     {
         var path = piece?.Asset?.RelativePath;
-        var def = piece as SaberAssetDefinition;
 
-        profile.Snapshot = ConfigSnapshot.SeedFromDefinition(def!);
+        profile.Customization = SaberCustomization.SeedFromDefinition(piece!);
 
         if (!string.IsNullOrEmpty(path) && _saberSettings.TryGetValue(path!, out var saved))
         {
             try
             {
-                await profile.Snapshot.ReadFrom(saved, _serializer);
+                await profile.Customization.ReadFromAsync(saved, _serializer);
                 _log.Debug($"LoadSaberSettings: loaded '{path}' ({profile.Hand})");
             }
             catch (Exception ex)
@@ -115,18 +115,6 @@ public class SaberLoadout
         _log.Debug($"LoadSaberSettings: fresh defaults for '{path}' ({profile.Hand})");
     }
 
-    public async Task EquipFromPreview(AssetPreview preview)
-    {
-        if (preview is null) return;
-        var entry = await _catalog.ResolveEntryByPreviewAsync(preview);
-        if (entry is null)
-        {
-            _log.Warn($"EquipFromPreview: could not resolve entry for preview '{preview.DisplayName}'");
-            return;
-        }
-        await EquipEntryAsync(entry);
-    }
-
     public void SyncDimensions(SaberProfile source)
     {
         source.PropagateChanges();
@@ -134,18 +122,20 @@ public class SaberLoadout
 
         target.Scale = new() { Length = source.Scale.Length, Width = source.Scale.Width };
 
-        if (source.Snapshot?.TrailSettings is not null && target.Snapshot is not null)
+        if (source.Customization?.TrailSettings is not null && target.Customization is not null)
         {
-            target.Snapshot.TrailSettings ??= new();
-            target.Snapshot.TrailSettings.CloneFrom(source.Snapshot.TrailSettings);
+            target.Customization.TrailSettings ??= new();
+            target.Customization.TrailSettings.CloneFrom(source.Customization.TrailSettings);
         }
     }
 
-    private bool _isLoadingConfig;
+    private int _configLoadDepth;
+
+    private bool _isLoadingConfig => _configLoadDepth > 0;
 
     public IDisposable ConfigLoadScope()
     {
-        _isLoadingConfig = true;
+        _configLoadDepth++;
         return new ConfigLoadGuard(this);
     }
 
@@ -153,7 +143,7 @@ public class SaberLoadout
     {
         private readonly SaberLoadout _owner;
         public ConfigLoadGuard(SaberLoadout owner) => _owner = owner;
-        public void Dispose() => _owner._isLoadingConfig = false;
+        public void Dispose() => _owner._configLoadDepth--;
     }
 
     internal void ResetAllModifierBindings()
@@ -164,50 +154,48 @@ public class SaberLoadout
 
     private static void ResetModifiersForProfile(SaberProfile profile)
     {
-        foreach (PieceDefinition piece in profile.Pieces)
+        if (profile.Equipped?.ComponentModifiers is { } modifiers)
         {
-            if (piece?.ComponentModifiers is null) continue;
-            foreach (var b in piece.ComponentModifiers.AllBindings()) b.Reset();
+            foreach (var b in modifiers.AllBindings()) b.Reset();
         }
 
-        if (profile.Snapshot is not null)
-            profile.Snapshot.ModifierState = null;
+        if (profile.Customization is not null)
+        profile.Customization.ModifierState = null;
     }
 
-    public async Task FromJson(JObject obj, Serializer serializer)
+    public async Task ReadFromAsync(JObject obj, Serializer serializer)
     {
+        var snapshot = CaptureState();
         try
         {
             ResetAllModifierBindings();
 
-            _log.Debug($"FromJson: clearing old state (Left pieces={Left.Pieces.Count}, Right pieces={Right.Pieces.Count})");
+            _log.Debug($"ReadFromAsync: clearing old state (Left equipped={Left.Equipped is not null}, Right equipped={Right.Equipped is not null})");
             _saberSettings.Clear();
-            Left.Pieces.Clear();
-            Right.Pieces.Clear();
-            Left.Snapshot = null;
-            Right.Snapshot = null;
+            Left.Equipped = null;
+            Right.Equipped = null;
+            Left.Customization = null;
+            Right.Customization = null;
             Left.Scale = SaberScale.Unit;
             Right.Scale = SaberScale.Unit;
-            Left.Trail = null;
-            Right.Trail = null;
 
             if (obj.TryGetValue(nameof(Left), out var leftToken))
-                await SaberProfileCodec.ReadInto(Left, (JObject)leftToken, serializer);
+            await SaberProfileCodec.ReadFromAsync(Left, (JObject)leftToken, serializer);
 
             if (obj.TryGetValue(nameof(Right), out var rightToken))
-                await SaberProfileCodec.ReadInto(Right, (JObject)rightToken, serializer);
+            await SaberProfileCodec.ReadFromAsync(Right, (JObject)rightToken, serializer);
 
             if (obj.TryGetValue("SaberSettings", out var ssToken) && ssToken is JObject ssObj)
             {
                 foreach (var prop in ssObj.Properties())
-                    _saberSettings[prop.Name] = (JObject)prop.Value;
-                _log.Debug($"FromJson: loaded {_saberSettings.Count} saber setting(s)");
+                _saberSettings[prop.Name] = (JObject)prop.Value;
+                _log.Debug($"ReadFromAsync: loaded {_saberSettings.Count} saber setting(s)");
             }
 
             if (Left.TryGetSaberAsset(out var diagSa))
-                _log.Info($"FromJson: After ReadInto: Left piece = '{diagSa?.OwnerEntry?.DisplayName}'");
+            _log.Info($"ReadFromAsync: After profile read: Left piece = '{diagSa?.OwnerEntry?.DisplayName}'");
             else
-                _log.Info($"FromJson: After ReadInto: Left has no saber asset (Pieces count = {Left.Pieces.Count})");
+            _log.Info("ReadFromAsync: After profile read: Left has no saber asset");
 
             if (obj.TryGetValue("Settings", out var settingsToken) && settingsToken is JObject settingsObj)
             {
@@ -217,29 +205,94 @@ public class SaberLoadout
                 ModSettingsCopier.CopyAll(restored, Settings);
 
                 Settings.RaisePropertyChanged(null);
-                _log.Debug("FromJson: settings restored from preset");
+                _log.Debug("ReadFromAsync: settings restored from preset");
             }
         }
         catch (Exception ex)
         {
-            _log.Error($"Failed to restore loadout:\n{ex}");
+            RestoreState(snapshot);
+            _log.Error($"Failed to restore loadout (rolled back to previous state):\n{ex}");
             throw;
         }
     }
 
-    public async Task<JToken> ToJson(Serializer serializer)
+    private readonly struct LoadoutState
     {
-        await SaveCurrentSettingsAsync(Left);
-        await SaveCurrentSettingsAsync(Right);
+        public readonly SaberAssetDefinition? LeftEquipped;
+        public readonly SaberAssetDefinition? RightEquipped;
+        public readonly SaberCustomization? LeftCustomization;
+        public readonly SaberCustomization? RightCustomization;
+        public readonly SaberScale LeftScale;
+        public readonly SaberScale RightScale;
+        public readonly Dictionary<string, JObject> SaberSettings;
+
+        public readonly JObject? LeftModifierState;
+        public readonly JObject? RightModifierState;
+
+        public LoadoutState(
+        SaberAssetDefinition? leftEquipped,
+        SaberAssetDefinition? rightEquipped,
+        SaberCustomization? leftCustomization,
+        SaberCustomization? rightCustomization,
+        SaberScale leftScale,
+        SaberScale rightScale,
+        Dictionary<string, JObject> saberSettings,
+        JObject? leftModifierState,
+        JObject? rightModifierState)
+        {
+            LeftEquipped = leftEquipped;
+            RightEquipped = rightEquipped;
+            LeftCustomization = leftCustomization;
+            RightCustomization = rightCustomization;
+            LeftScale = leftScale;
+            RightScale = rightScale;
+            SaberSettings = saberSettings;
+            LeftModifierState = leftModifierState;
+            RightModifierState = rightModifierState;
+        }
+    }
+
+    private LoadoutState CaptureState() => new(
+    Left.Equipped,
+    Right.Equipped,
+    Left.Customization,
+    Right.Customization,
+    Left.Scale,
+    Right.Scale,
+    new Dictionary<string, JObject>(_saberSettings),
+    Left.Customization?.ModifierState,
+    Right.Customization?.ModifierState);
+
+    private void RestoreState(in LoadoutState state)
+    {
+        Left.Equipped = state.LeftEquipped;
+        Right.Equipped = state.RightEquipped;
+        Left.Customization = state.LeftCustomization;
+        Right.Customization = state.RightCustomization;
+        Left.Scale = state.LeftScale;
+        Right.Scale = state.RightScale;
+
+        if (Left.Customization is not null) Left.Customization.ModifierState = state.LeftModifierState;
+        if (Right.Customization is not null) Right.Customization.ModifierState = state.RightModifierState;
+
+        _saberSettings.Clear();
+        foreach (var kv in state.SaberSettings)
+        _saberSettings[kv.Key] = kv.Value;
+    }
+
+    public JToken WriteTo(Serializer serializer)
+    {
+        SaveCurrentSettings(Left);
+        SaveCurrentSettings(Right);
 
         var ssObj = new JObject();
         foreach (var kv in _saberSettings)
-            ssObj[kv.Key] = kv.Value;
+        ssObj[kv.Key] = kv.Value;
 
         return new JObject
         {
-            { nameof(Left), await SaberProfileCodec.Write(Left, serializer) },
-            { nameof(Right), await SaberProfileCodec.Write(Right, serializer) },
+            { nameof(Left), SaberProfileCodec.WriteTo(Left, serializer) },
+            { nameof(Right), SaberProfileCodec.WriteTo(Right, serializer) },
             { "Settings", JObject.FromObject(Settings, serializer.Json) },
             { "SaberSettings", ssObj }
         };

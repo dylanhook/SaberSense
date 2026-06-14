@@ -1,6 +1,7 @@
 // Copyright (c) 2026 dylanhook. All rights reserved.
 // Licensed under the SaberSense Proprietary License. See LICENSE file in the project root.
 
+using CameraUtils.Core;
 using SaberSense.Configuration;
 using SaberSense.Core.Utilities;
 using System.Collections.Generic;
@@ -13,20 +14,41 @@ public interface IPartFinalizer
     void ProcessPart(GameObject partObject);
 }
 
-public interface ISaberFinalizer
+public interface ISaberEffect
 {
     void ProcessSaber(LiveSaber saberObject);
+
+    void OnColorChanged(Color color);
+
+    void OnScaleChanged();
+
+    void OnVisibilityLayerChanged(VisibilityLayer layer);
+
+    void OnTeardown();
 }
 
-internal sealed class DefaultSaberFinalizer : ISaberFinalizer
+internal abstract class SaberEffectBase : ISaberEffect
+{
+    public abstract void ProcessSaber(LiveSaber saber);
+
+    public virtual void OnColorChanged(Color color) { }
+
+    public virtual void OnScaleChanged() { }
+
+    public virtual void OnVisibilityLayerChanged(VisibilityLayer layer) { }
+
+    public virtual void OnTeardown() { }
+}
+
+internal sealed class DefaultSaberFinalizer : SaberEffectBase
 {
     private const int SaberLayer = 12;
 
-    private readonly ModSettings _config;
+    private readonly ModSettings _settings;
 
-    internal DefaultSaberFinalizer(ModSettings config) => _config = config;
+    internal DefaultSaberFinalizer(ModSettings settings) => _settings = settings;
 
-    public void ProcessSaber(LiveSaber saber)
+    public override void ProcessSaber(LiveSaber saber)
     {
         var root = saber.GameObject;
 
@@ -40,7 +62,7 @@ internal sealed class DefaultSaberFinalizer : ISaberFinalizer
         foreach (var col in colliders) col.enabled = false;
 
         root.GetComponentsInChildren(true, audioSources);
-        foreach (var src in audioSources) src.volume *= _config.AudioGain;
+        foreach (var src in audioSources) src.volume *= _settings.AudioGain;
 
         root.GetComponentsInChildren(true, renderers);
         foreach (var rend in renderers) rend.sortingOrder = 3;

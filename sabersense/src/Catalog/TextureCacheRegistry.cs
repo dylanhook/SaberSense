@@ -1,7 +1,7 @@
 // Copyright (c) 2026 dylanhook. All rights reserved.
 // Licensed under the SaberSense Proprietary License. See LICENSE file in the project root.
 
-using SaberSense.Core;
+using SaberSense.App;
 using SaberSense.Core.Logging;
 using SaberSense.Core.Utilities;
 using System;
@@ -33,7 +33,7 @@ internal sealed class TextureCacheRegistry : IDisposable
         {
             try
             {
-                await cache.WaitForFinish();
+                await cache.WaitForFinishAsync();
                 var result = await cache.RetrieveTexture(name);
                 if (result is not null) return result;
             }
@@ -59,6 +59,6 @@ internal sealed class TextureCacheRegistry : IDisposable
     public void Dispose()
     {
         foreach (var cache in _caches.Values)
-            cache.Dispose();
+        cache.Dispose();
     }
 }

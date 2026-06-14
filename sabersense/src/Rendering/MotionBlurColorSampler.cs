@@ -1,6 +1,7 @@
 // Copyright (c) 2026 dylanhook. All rights reserved.
 // Licensed under the SaberSense Proprietary License. See LICENSE file in the project root.
 
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -10,14 +11,16 @@ internal static class MotionBlurColorSampler
 {
     public const int StripResolution = 16;
 
-    public static Color[] Sample(Renderer[] renderers, Matrix4x4 rootInverse, float minZ, float maxZ)
+    public static Color[] Sample(
+    Renderer[] renderers, Matrix4x4 rootInverse, float minZ, float maxZ,
+    Dictionary<int, Color[]?> texStripCache)
     {
         if (renderers is null || renderers.Length is 0 || maxZ - minZ <= 0f)
-            return new Color[StripResolution];
+        return new Color[StripResolution];
 
         var strip = new Color[StripResolution];
         for (int i = 0; i < StripResolution; i++)
-            strip[i] = new Color(-1f, -1f, -1f, -1f);
+        strip[i] = new Color(-1f, -1f, -1f, -1f);
         float range = maxZ - minZ;
 
         foreach (var r in renderers)
@@ -34,25 +37,17 @@ internal static class MotionBlurColorSampler
                 if (mat == null) continue;
 
                 Color matColor = GetMaterialColor(mat);
+                Color[]? texStrip = ResolveTexStrip(mat, texStripCache);
 
-                Texture2D? readableTex = null;
-                RenderTexture? tempRT = null;
-                bool createdTex = false;
-
-                readableTex = TryGetReadableTexture(mat, out tempRT, out createdTex);
-
-                if (readableTex != null)
+                if (texStrip != null)
                 {
-                    SampleFromTexture(readableTex, matColor, strip, r, rootInverse,
-                        minZ, maxZ, range, rMinZ, rMaxZ);
+                    CompositeTexStrip(texStrip, matColor, strip, r, rootInverse,
+                    minZ, range, rMinZ, rMaxZ);
                 }
                 else if (matColor.a > 0.01f && matColor.maxColorComponent > 0.05f)
                 {
                     AddFlatColor(strip, r, rootInverse, matColor, minZ, range);
                 }
-
-                if (createdTex && readableTex != null) Object.Destroy(readableTex);
-                if (tempRT != null) RenderTexture.ReleaseTemporary(tempRT);
             }
         }
 
@@ -66,10 +61,25 @@ internal static class MotionBlurColorSampler
         return strip;
     }
 
-    private static void SampleFromTexture(
-        Texture2D tex, Color matColor, Color[] strip, Renderer r,
-        Matrix4x4 rootInverse, float minZ, float maxZ, float range,
-        float rMinZ, float rMaxZ)
+    private static Color[]? ResolveTexStrip(Material mat, Dictionary<int, Color[]?> texStripCache)
+    {
+        if (!mat.HasProperty("_MainTex")) return null;
+        if (mat.GetTexture("_MainTex") is not Texture2D sourceTex) return null;
+
+        int key = sourceTex.GetInstanceID();
+        if (texStripCache.TryGetValue(key, out var cached)) return cached;
+
+        var readableTex = TryGetReadableTexture(sourceTex, out var tempRT, out bool createdTex);
+        Color[]? texStrip = readableTex != null ? BuildTexStrip(readableTex) : null;
+
+        if (createdTex && readableTex != null) Object.Destroy(readableTex);
+        if (tempRT != null) RenderTexture.ReleaseTemporary(tempRT);
+
+        texStripCache[key] = texStrip;
+        return texStrip;
+    }
+
+    private static Color[] BuildTexStrip(Texture2D tex)
     {
         int texH = tex.height;
         int texW = tex.width;
@@ -89,7 +99,14 @@ internal static class MotionBlurColorSampler
             }
             texStrip[i] = rowAvg / sampleCount;
         }
+        return texStrip;
+    }
 
+    private static void CompositeTexStrip(
+    Color[] texStrip, Color matColor, Color[] strip, Renderer r,
+    Matrix4x4 rootInverse, float minZ, float range,
+    float rMinZ, float rMaxZ)
+    {
         float rRange = rMaxZ - rMinZ;
         if (rRange > 0.001f)
         {
@@ -108,9 +125,9 @@ internal static class MotionBlurColorSampler
                     if (matColor.maxColorComponent > 0.1f)
                     {
                         blended = new Color(
-                            texColor.r * matColor.r,
-                            texColor.g * matColor.g,
-                            texColor.b * matColor.b, 1f);
+                        texColor.r * matColor.r,
+                        texColor.g * matColor.g,
+                        texColor.b * matColor.b, 1f);
                     }
                     else
                     {
@@ -123,9 +140,9 @@ internal static class MotionBlurColorSampler
                 }
 
                 if (strip[i].r < 0)
-                    strip[i] = blended;
+                strip[i] = blended;
                 else if (blended.maxColorComponent > strip[i].maxColorComponent)
-                    strip[i] = blended;
+                strip[i] = blended;
             }
         }
         else
@@ -134,13 +151,10 @@ internal static class MotionBlurColorSampler
         }
     }
 
-    private static Texture2D? TryGetReadableTexture(Material mat, out RenderTexture? tempRT, out bool createdTex)
+    private static Texture2D? TryGetReadableTexture(Texture2D tex, out RenderTexture? tempRT, out bool createdTex)
     {
         tempRT = null;
         createdTex = false;
-
-        if (!mat.HasProperty("_MainTex")) return null;
-        if (mat.GetTexture("_MainTex") is not Texture2D tex) return null;
 
         if (tex.isReadable) return tex;
 
@@ -192,9 +206,9 @@ internal static class MotionBlurColorSampler
             if (z >= localMinZ && z <= localMaxZ)
             {
                 if (strip[i].r < 0)
-                    strip[i] = color;
+                strip[i] = color;
                 else if (color.maxColorComponent > strip[i].maxColorComponent)
-                    strip[i] = color;
+                strip[i] = color;
             }
         }
     }
@@ -217,12 +231,14 @@ internal static class MotionBlurColorSampler
         }
     }
 
+    private static readonly string[] ColorProperties =
+    ["_EmissionColor", "_Color", "_TintColor", "_BaseColor", "_Glow", "_SimpleColor"];
+
     private static Color GetMaterialColor(Material mat)
     {
-        string[] props = { "_EmissionColor", "_Color", "_TintColor", "_BaseColor", "_Glow", "_SimpleColor" };
         var shader = mat.shader;
 
-        foreach (var prop in props)
+        foreach (var prop in ColorProperties)
         {
             if (!mat.HasProperty(prop)) continue;
 

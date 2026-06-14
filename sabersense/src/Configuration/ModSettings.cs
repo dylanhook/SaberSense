@@ -1,9 +1,8 @@
 // Copyright (c) 2026 dylanhook. All rights reserved.
 // Licensed under the SaberSense Proprietary License. See LICENSE file in the project root.
 
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-using SaberSense.Core.Logging;
+using SaberSense.GUI.Framework.Core;
+using SaberSense.Input;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -11,6 +10,8 @@ namespace SaberSense.Configuration;
 
 internal sealed class ModSettings : BindableSettings
 {
+    private static readonly ModSettings _defaults = new();
+
     private bool _isActive = true;
     public bool IsActive { get => _isActive; set => SetField(ref _isActive, value); }
 
@@ -32,14 +33,14 @@ internal sealed class ModSettings : BindableSettings
     private float _audioGain = 1f;
     public float AudioGain { get => _audioGain; set => SetField(ref _audioGain, value); }
 
-    private int _actionKeyButton;
-    public int ActionKeyButton { get => _actionKeyButton; set => SetField(ref _actionKeyButton, value); }
+    private VrButtonBinding _actionKeyButton;
+    public VrButtonBinding ActionKeyButton { get => _actionKeyButton; set => SetField(ref _actionKeyButton, value); }
 
     private bool _pauseKeyEnabled;
     public bool PauseKeyEnabled { get => _pauseKeyEnabled; set => SetField(ref _pauseKeyEnabled, value); }
 
-    private int _pauseKeyButton;
-    public int PauseKeyButton { get => _pauseKeyButton; set => SetField(ref _pauseKeyButton, value); }
+    private VrButtonBinding _pauseKeyButton;
+    public VrButtonBinding PauseKeyButton { get => _pauseKeyButton; set => SetField(ref _pauseKeyButton, value); }
 
     private bool _enableEventManager = true;
     public bool EnableEventManager { get => _enableEventManager; set => SetField(ref _enableEventManager, value); }
@@ -74,8 +75,8 @@ internal sealed class ModSettings : BindableSettings
     private float _smoothingStrength;
     public float SmoothingStrength { get => _smoothingStrength; set => SetField(ref _smoothingStrength, value); }
 
-    private ESaberPipeline _activePipeline;
-    public ESaberPipeline ActivePipeline { get => _activePipeline; set => SetField(ref _activePipeline, value); }
+    private SaberPipeline _activePipeline;
+    public SaberPipeline ActivePipeline { get => _activePipeline; set => SetField(ref _activePipeline, value); }
 
     private List<int> _transformSelections = [];
     public List<int> TransformSelections { get => _transformSelections; set => SetField(ref _transformSelections, value); }
@@ -83,12 +84,8 @@ internal sealed class ModSettings : BindableSettings
     private List<int> _grabSelections = [];
     public List<int> GrabSelections { get => _grabSelections; set => SetField(ref _grabSelections, value); }
 
-    private JObject _trailDimensions = [];
-    [JsonProperty]
-    public JObject TrailDimensions { get => _trailDimensions; set => SetField(ref _trailDimensions, value); }
-
-    private TrailRenderingOptions _trail = new();
-    public TrailRenderingOptions Trail { get => _trail; set => SetField(ref _trail, value); }
+    private TrailConfig _trail = new();
+    public TrailConfig Trail { get => _trail; set => SetField(ref _trail, value); }
 
     private MotionBlurConfig _motionBlur = new();
     public MotionBlurConfig MotionBlur { get => _motionBlur; set => SetField(ref _motionBlur, value); }
@@ -105,65 +102,9 @@ internal sealed class ModSettings : BindableSettings
     private SwingExtrapolationConfig _swingExtrapolation = new();
     public SwingExtrapolationConfig SwingExtrapolation { get => _swingExtrapolation; set => SetField(ref _swingExtrapolation, value); }
 
-    public (int Length, float Width)? GetTrailDimensions(string saberName)
-    {
-        try
-        {
-            if (TrailDimensions is null || !TrailDimensions.ContainsKey(saberName)) return null;
-            if (TrailDimensions[saberName] is not JObject entry) return null;
-            return (entry.Value<int>("Length"), entry.Value<float>("Width"));
-        }
-        catch (System.Exception ex)
-        {
-            ModLogger.ForSource("ModSettings").Warn($"Failed to read trail dimensions for '{saberName}': {ex.Message}");
-            return null;
-        }
-    }
-
-    public void SetTrailDimensions(string saberName, int length, float width)
-    {
-        TrailDimensions ??= [];
-        TrailDimensions[saberName] = new JObject { ["Length"] = length, ["Width"] = width };
-        Notify(nameof(TrailDimensions));
-    }
-
     internal void ResetToDefaults()
     {
-        IsActive = true;
-
-        RandomizeSaber = false;
-        AnimateSelection = true;
-        MaxGlobalWidth = 3f;
-        ShowGameplayButton = true;
-        ShowDefaultSaber = false;
-        AudioGain = 1f;
-        ActionKeyButton = 0;
-        PauseKeyEnabled = false;
-        PauseKeyButton = 0;
-        EnableEventManager = true;
-        WarningMarkerEnabled = false;
-        WarningTypes = [0];
-        WarningLayerFilter = [0, 1, 2];
-        HidePlatform = false;
-        KeepSabersOnFocusLoss = false;
-        FloorCalibrationEnabled = false;
-        FloorCalibrationY = 0f;
-
-        AccentColor = new Color(0.62f, 0.79f, 0.16f, 1f);
-
-        SmoothingEnabled = false;
-        SmoothingStrength = 0f;
-        ActivePipeline = default;
-
-        TransformSelections = [];
-        GrabSelections = [];
-        TrailDimensions = [];
-
-        Trail = new();
-        MotionBlur = new();
-        WorldMod = new();
-        Visibility = new();
-        Editor = new();
-        SwingExtrapolation = new();
+        ModSettingsCopier.CopyAll(_defaults, this);
+        RaisePropertyChanged(null);
     }
 }

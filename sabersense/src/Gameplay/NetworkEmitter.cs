@@ -40,13 +40,13 @@ internal sealed class NetworkEmitter
     private readonly ParticleSystem.Particle[] _particleBuf;
     private readonly ParticleSystem _renderer;
     private readonly List<LineRenderer> _lines = [];
-    private readonly ModSettings _config;
+    private readonly ModSettings _settings;
 
     public GameObject Root { get; }
 
-    public NetworkEmitter(Transform parent, float strength, ProceduralMaterialFactory materialFactory, ModSettings config)
+    public NetworkEmitter(Transform parent, float strength, ProceduralMaterialFactory materialFactory, ModSettings settings)
     {
-        _config = config;
+        _settings = settings;
 
         Root = new GameObject("Network");
         Root.transform.SetParent(parent, false);
@@ -68,9 +68,9 @@ internal sealed class NetworkEmitter
         for (int i = 0; i < _count; i++)
         {
             _pos[i] = new Vector3(
-                Random.Range(-BoxHalf.x, BoxHalf.x),
-                Random.Range(-BoxHalf.y, BoxHalf.y),
-                Random.Range(-BoxHalf.z, BoxHalf.z)
+            Random.Range(-BoxHalf.x, BoxHalf.x),
+            Random.Range(-BoxHalf.y, BoxHalf.y),
+            Random.Range(-BoxHalf.z, BoxHalf.z)
             );
             _vel[i] = Random.onUnitSphere * Random.Range(MinVelocity, MaxVelocity);
         }
@@ -208,7 +208,7 @@ internal sealed class NetworkEmitter
     }
 
     private void DrawConnectionsForParticle(int i, Vector3 camPos, Color baseColor, float connDistSqr,
-        float gridMinX, float gridMinY, float gridMinZ, ref int lineIdx)
+    float gridMinX, float gridMinY, float gridMinZ, ref int lineIdx)
     {
         int cx = GridCell(_pos[i].x, gridMinX, GX);
         int cy = GridCell(_pos[i].y, gridMinY, GY);
@@ -225,7 +225,7 @@ internal sealed class NetworkEmitter
                     if (nz < 0 || nz >= GZ) continue;
                     var cell = _grid[nx * GY * GZ + ny * GZ + nz];
                     for (int ci = 0; ci < cell.Count && lineIdx < _lines.Count; ci++)
-                        TryDrawLine(i, cell[ci], camPos, baseColor, connDistSqr, ref lineIdx);
+                    TryDrawLine(i, cell[ci], camPos, baseColor, connDistSqr, ref lineIdx);
                 }
             }
         }
@@ -267,7 +267,7 @@ internal sealed class NetworkEmitter
 
     private Color GetOverrideOrDefault(Color defaultColor)
     {
-        if (_config is null || !_config.WorldMod.OverrideColor) return defaultColor;
-        return _config.WorldMod.NetworkColor;
+        if (_settings is null || !_settings.WorldMod.OverrideColor) return defaultColor;
+        return _settings.WorldMod.NetworkColor;
     }
 }

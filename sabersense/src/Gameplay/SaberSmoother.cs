@@ -50,17 +50,6 @@ internal sealed class SaberSmoother : MonoBehaviour
         transform.SetPositionAndRotation(_smoothedPos, _smoothedRot);
     }
 
-    public void ResetState()
-    {
-        if (_target != null)
-        {
-            _smoothedPos = _target.position;
-            _smoothedRot = _target.rotation;
-        }
-        transform.localPosition = Vector3.zero;
-        transform.localRotation = Quaternion.identity;
-    }
-
     public static SaberSmoother InsertAbove(Transform target, Transform parent, float strength)
     {
         var go = new GameObject("SaberSmoother");

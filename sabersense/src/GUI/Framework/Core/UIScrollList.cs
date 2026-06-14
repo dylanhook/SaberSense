@@ -28,6 +28,12 @@ public class UIScrollList : UIElement
     private ViewportScrollbarAdjuster _viewportAdjuster = null!;
     private bool _compact;
 
+    private Func<UIListCell> _cellFactory;
+
+    private Func<UIListCellData, string, bool> _filterPredicate =
+    static (d, q) => string.IsNullOrEmpty(q) ||
+    d.Title.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0;
+
     private List<int> _filteredIndices = [];
     private int _virtualStart = 0;
     private int _virtualEnd = 0;
@@ -39,6 +45,10 @@ public class UIScrollList : UIElement
 
     public UIScrollList(string name = "ScrollList", string? title = null) : base(name)
     {
+        _cellFactory = () => _compact
+        ? new UISimpleCell(new UIListCellData(""))
+        : new UIListCell(new UIListCellData(""));
+
         UITheme.OnAccentChanged += RefreshSelectedAccent;
 
         var (titleLabel, textStartX, textWidth) = CreateTitleLabel(title);
@@ -70,7 +80,7 @@ public class UIScrollList : UIElement
         bottomBlocker.offsetMin = new Vector2(0, -20);
         bottomBlocker.offsetMax = new Vector2(0, viewportRect.offsetMin.y);
 
-        _scrollRect = bg.GameObject.AddComponent<UIGroupBox.VRSafeScrollRect>();
+        _scrollRect = bg.GameObject.AddComponent<VRSafeScrollRect>();
         _scrollRect.viewport = viewportRect;
         _scrollRect.content = _contentContainer.RectTransform;
         _scrollRect.horizontal = false;
@@ -82,17 +92,17 @@ public class UIScrollList : UIElement
 
         _viewportAdjuster.Init(_scrollRect, viewportRect, scrollbarGO);
 
-        var guard = bg.GameObject.AddComponent<UIGroupBox.ContentGuard>();
+        var guard = bg.GameObject.AddComponent<ContentGuard>();
         guard.Init(_scrollRect, viewportRect, _contentContainer.RectTransform);
 
-        GameObject.AddComponent<UIGroupBox.CanvasAttachGuard>();
+        GameObject.AddComponent<CanvasAttachGuard>();
     }
 
     private (UILabel label, float textStartX, float textWidth) CreateTitleLabel(string? title)
     {
         var titleLabel = new UILabel("ListTitle", title!)
-            .SetFontSize(UITheme.FontSmall)
-            .SetColor(UITheme.TextLabel);
+        .SetFontSize(UITheme.FontSmall)
+        .SetColor(UITheme.TextLabel);
         titleLabel.TextComponent.fontStyle = TMPro.FontStyles.Bold;
         titleLabel.TextComponent.alignment = TMPro.TextAlignmentOptions.Left;
 
@@ -208,7 +218,7 @@ public class UIScrollList : UIElement
         dummyHandleRect.anchorMax = Vector2.one;
         dummyHandleRect.sizeDelta = Vector2.zero;
 
-        var scrollbar = scrollbarGO.AddComponent<UIGroupBox.VRSafeScrollbar>();
+        var scrollbar = scrollbarGO.AddComponent<VRSafeScrollbar>();
         scrollbar.handleRect = dummyHandleRect;
         scrollbar.direction = Scrollbar.Direction.BottomToTop;
         scrollbar.targetGraphic = handleImg;
@@ -241,6 +251,21 @@ public class UIScrollList : UIElement
         return this;
     }
 
+    public UIScrollList SetCellFactory(Func<UIListCell>? factory)
+    {
+        _cellFactory = factory ?? (() => _compact
+        ? new UISimpleCell(new UIListCellData(""))
+        : new UIListCell(new UIListCellData("")));
+        return this;
+    }
+
+    public UIScrollList SetFilter(Func<UIListCellData, string, bool>? predicate)
+    {
+        _filterPredicate = predicate ?? (static (d, q) => string.IsNullOrEmpty(q) ||
+        d.Title.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0);
+        return this;
+    }
+
     public UIScrollList EnableSearch(RectTransform canvasRoot)
     {
         if (_searchBar is not null || _bgRect == null) return this;
@@ -258,7 +283,7 @@ public class UIScrollList : UIElement
         viewport.offsetMax = new Vector2(viewport.offsetMax.x, viewport.offsetMax.y - 5f);
 
         if (_topBlocker != null)
-            _topBlocker.offsetMin = new Vector2(0, viewport.offsetMax.y);
+        _topBlocker.offsetMin = new Vector2(0, viewport.offsetMax.y);
 
         _viewportAdjuster.SetSearchBar(_searchBar.RectTransform);
 
@@ -273,8 +298,7 @@ public class UIScrollList : UIElement
         _filteredIndices.Clear();
         for (int i = 0; i < _items.Count; i++)
         {
-            if (string.IsNullOrEmpty(_filterQuery) ||
-                _items[i].Title.IndexOf(_filterQuery, StringComparison.OrdinalIgnoreCase) >= 0)
+            if (_filterPredicate(_items[i], _filterQuery))
             {
                 _filteredIndices.Add(i);
             }
@@ -287,10 +311,10 @@ public class UIScrollList : UIElement
         RebuildFilteredIndices();
 
         if (_selectedIndex >= 0 && !_filteredIndices.Contains(_selectedIndex))
-            _selectedIndex = -1;
+        _selectedIndex = -1;
 
         if (_scrollRect != null)
-            _scrollRect.verticalNormalizedPosition = 1f;
+        _scrollRect.verticalNormalizedPosition = 1f;
         RefreshVirtualWindow(true);
     }
 
@@ -320,7 +344,7 @@ public class UIScrollList : UIElement
     {
         _selectedIndex = -1;
         foreach (var cell in _cells)
-            cell.SetSelected(false);
+        cell.SetSelected(false);
     }
 
     private void RebuildCells()
@@ -330,9 +354,9 @@ public class UIScrollList : UIElement
             cell.SetSelected(false);
             cell.GameObject.SetActive(false);
             if (_cellPool.Count < MaxPoolSize)
-                _cellPool.Push(cell);
+            _cellPool.Push(cell);
             else
-                cell.Dispose();
+            cell.Dispose();
         }
         _cells.Clear();
         _virtualStart = 0;
@@ -375,8 +399,8 @@ public class UIScrollList : UIElement
         float viewportHeight = _scrollRect.viewport.rect.height;
 
         int visibleCount = viewportHeight > 1f
-            ? Mathf.CeilToInt(viewportHeight / RowStride) + 1
-            : 20;
+        ? Mathf.CeilToInt(viewportHeight / RowStride) + 1
+        : 20;
         int totalWithBuffer = visibleCount + VirtualBuffer * 2;
 
         float contentHeight = totalFiltered * RowStride;
@@ -403,26 +427,18 @@ public class UIScrollList : UIElement
         while (_cells.Count < neededCells)
         {
             UIListCell cell;
-            if (_compact)
+
+            if (!_compact && _cellPool.Count is > 0)
             {
-                cell = new UISimpleCell(new UIListCellData(""));
-                cell.SetParent(_contentContainer, false);
-                cell.AddLayoutElement(preferredHeight: _cellHeight);
+                cell = _cellPool.Pop();
+                cell.GameObject.SetActive(true);
+                cell.RectTransform.SetParent(_contentContainer.RectTransform, false);
             }
             else
             {
-                if (_cellPool.Count is > 0)
-                {
-                    cell = _cellPool.Pop();
-                    cell.GameObject.SetActive(true);
-                    cell.RectTransform.SetParent(_contentContainer.RectTransform, false);
-                }
-                else
-                {
-                    cell = new UIListCell(new UIListCellData(""))
-                        .SetParent(_contentContainer, false);
-                    cell.AddLayoutElement(preferredHeight: _cellHeight);
-                }
+                cell = _cellFactory();
+                cell.SetParent(_contentContainer, false);
+                cell.AddLayoutElement(preferredHeight: _cellHeight);
             }
 
             if (_cellPadding is not null)
@@ -498,7 +514,7 @@ public class UIScrollList : UIElement
             {
                 int cellIdx = filteredIdx - _virtualStart;
                 if (cellIdx >= 0 && cellIdx < _cells.Count)
-                    _cells[cellIdx].SetIcon(icon);
+                _cells[cellIdx].SetIcon(icon);
             }
             break;
         }

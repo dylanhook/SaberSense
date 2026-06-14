@@ -1,8 +1,8 @@
 // Copyright (c) 2026 dylanhook. All rights reserved.
 // Licensed under the SaberSense Proprietary License. See LICENSE file in the project root.
 
+using SaberSense.Core;
 using SaberSense.Core.Utilities;
-using SaberSense.Profiles;
 using SaberSense.Rendering;
 using SaberSense.Rendering.TrailGeometry;
 using System;
@@ -38,18 +38,18 @@ internal sealed class EditScope
         if (PreviewMirror is not null) action(PreviewMirror);
     }
 
-    public void ApplyTrail(Action<TrailSnapshot> action)
+    public void ApplyTrail(Action<LiveTrail> action)
     {
-        LiveSaber.WithTrailData(_session.FocusedSaber, action);
+        LiveSaber.WithLiveTrail(_session.FocusedSaber, action);
         if (Linked)
-            LiveSaber.WithTrailData(OtherSaber(), action);
+        LiveSaber.WithLiveTrail(OtherSaber(), action);
     }
 
     public void ApplyTransform(Action<TransformApplier> action)
     {
         LiveSaber.WithTransformApplier(_session.FocusedSaber, action);
         if (Linked)
-            LiveSaber.WithTransformApplier(OtherSaber(), action);
+        LiveSaber.WithTransformApplier(OtherSaber(), action);
         LiveSaber.WithTransformApplier(PreviewMirror, action);
     }
 

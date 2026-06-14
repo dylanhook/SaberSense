@@ -40,15 +40,15 @@ internal sealed class LiveSaberRegistry
     {
         var alive = new List<LiveSaber>(_entries.Count);
         foreach (var weak in _entries)
-            if (weak.TryGetTarget(out var saber))
-                alive.Add(saber);
+        if (weak.TryGetTarget(out var saber))
+        alive.Add(saber);
         return alive;
     }
 
     private void Prune()
     {
         for (int i = _entries.Count - 1; i >= 0; i--)
-            if (!_entries[i].TryGetTarget(out _))
-                _entries.RemoveAt(i);
+        if (!_entries[i].TryGetTarget(out _))
+        _entries.RemoveAt(i);
     }
 }

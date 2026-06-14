@@ -1,16 +1,16 @@
-{
-  "$schema": "https://raw.githubusercontent.com/bsmg/BSIPA-MetadataFileSchema/master/Schema.json",
-  "id": "SaberSense",
-  "name": "SaberSense",
-  "author": "dylan",
-  "version": "1.0.1",
-  "description": "Get Good, Get SaberSense",
-  "gameVersion": "1.40.0",
-  "dependsOn": {
-    "BSIPA": "^4.3.0",
-    "SiraUtil": "^3.1.7",
-    "BeatSaberMarkupLanguage": "^1.11.0",
-    "AssetBundleLoadingTools": "^1.1.10",
-    "CameraUtils": "^1.0.0"
-  }
+{
+  "$schema": "https://raw.githubusercontent.com/bsmg/BSIPA-MetadataFileSchema/master/Schema.json",
+  "id": "SaberSense",
+  "name": "SaberSense",
+  "author": "dylan",
+  "version": "1.0.2",
+  "description": "Get Good, Get SaberSense",
+  "gameVersion": "1.40.0",
+  "dependsOn": {
+    "BSIPA": "^4.3.0",
+    "SiraUtil": "^3.1.7",
+    "BeatSaberMarkupLanguage": "^1.11.0",
+    "AssetBundleLoadingTools": "^1.1.10",
+    "CameraUtils": "^1.0.0"
+  }
 }

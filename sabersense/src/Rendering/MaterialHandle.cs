@@ -24,6 +24,15 @@ public class MaterialHandle : IDisposable
     private bool _disposed;
     private readonly bool _isOwned;
 
+    private const int OverrideRenderQueue = 3100;
+    private const int OverrideZWriteOff = 0;
+    private const int OverrideZTestAlways = 8;
+
+    private int? _savedRenderQueue;
+    private int? _savedZWrite;
+    private int? _savedZTest;
+    private bool _sortOrderOverridden;
+
     public MaterialHandle(Material? source) : this(source, true) { }
 
     private MaterialHandle(Material? source, bool isOwned)
@@ -49,6 +58,40 @@ public class MaterialHandle : IDisposable
         _snapshot = new Material(Material);
     }
 
+    public void ApplySortOrder()
+    {
+        if (_material is not { } mat) return;
+
+        if (!_sortOrderOverridden)
+        {
+            _savedRenderQueue = mat.renderQueue;
+            if (mat.HasProperty(ShaderUtils.ZWriteId)) _savedZWrite = mat.GetInt(ShaderUtils.ZWriteId);
+            if (mat.HasProperty(ShaderUtils.ZTestId)) _savedZTest = mat.GetInt(ShaderUtils.ZTestId);
+            _sortOrderOverridden = true;
+        }
+
+        mat.renderQueue = OverrideRenderQueue;
+        if (mat.HasProperty(ShaderUtils.ZWriteId)) mat.SetInt(ShaderUtils.ZWriteId, OverrideZWriteOff);
+        if (mat.HasProperty(ShaderUtils.ZTestId)) mat.SetInt(ShaderUtils.ZTestId, OverrideZTestAlways);
+    }
+
+    public void RevertSortOrder()
+    {
+        if (!_sortOrderOverridden) return;
+
+        if (_material is { } mat)
+        {
+            if (_savedRenderQueue.HasValue) mat.renderQueue = _savedRenderQueue.Value;
+            if (_savedZWrite.HasValue && mat.HasProperty(ShaderUtils.ZWriteId)) mat.SetInt(ShaderUtils.ZWriteId, _savedZWrite.Value);
+            if (_savedZTest.HasValue && mat.HasProperty(ShaderUtils.ZTestId)) mat.SetInt(ShaderUtils.ZTestId, _savedZTest.Value);
+        }
+
+        _savedRenderQueue = null;
+        _savedZWrite = null;
+        _savedZTest = null;
+        _sortOrderOverridden = false;
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
@@ -66,7 +109,7 @@ internal sealed class RendererBoundMaterialHandle : MaterialHandle
     private readonly int _slotIndex;
 
     public RendererBoundMaterialHandle(Material material, Renderer renderer, int slotIndex)
-        : base(material)
+    : base(material)
     {
         _renderer = renderer;
         _slotIndex = slotIndex;

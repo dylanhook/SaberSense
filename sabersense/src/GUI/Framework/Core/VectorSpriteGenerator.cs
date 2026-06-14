@@ -13,7 +13,7 @@ internal static class VectorSpriteGenerator
     public static void ClearCache()
     {
         foreach (var sprite in Cache.Values)
-            if (sprite != null) UnityEngine.Object.Destroy(sprite);
+        if (sprite != null) UnityEngine.Object.Destroy(sprite);
         Cache.Clear();
     }
 
@@ -21,7 +21,7 @@ internal static class VectorSpriteGenerator
     {
         var key = (svgPath, size);
         if (Cache.TryGetValue(key, out var cached))
-            return cached;
+        return cached;
 
         var contours = SvgPathParser.Parse(svgPath);
         var tris = PolygonTriangulator.Triangulate(contours, out var verts);
@@ -55,7 +55,7 @@ internal static class VectorSpriteGenerator
     }
 
     private static Vector2 MapPoint(Vector2 p, VectorBounds bounds,
-        float scale, float offX, float offY, int size)
+    float scale, float offX, float offY, int size)
     {
         float x = (p.x - bounds.MinX) * scale + offX;
         float y = size - ((p.y - bounds.MinY) * scale + offY);
@@ -63,7 +63,7 @@ internal static class VectorSpriteGenerator
     }
 
     private static void RasterizeTriangle(Color32[] pixels, int size,
-        Vector2 a, Vector2 b, Vector2 c)
+    Vector2 a, Vector2 b, Vector2 c)
     {
         int minPx = Mathf.Max(0, Mathf.FloorToInt(Mathf.Min(a.x, Mathf.Min(b.x, c.x))));
         int maxPx = Mathf.Min(size - 1, Mathf.CeilToInt(Mathf.Max(a.x, Mathf.Max(b.x, c.x))));
@@ -73,12 +73,12 @@ internal static class VectorSpriteGenerator
         var white = new Color32(255, 255, 255, 255);
 
         for (int py = minPy; py <= maxPy; py++)
-            for (int px = minPx; px <= maxPx; px++)
-            {
-                var p = new Vector2(px + 0.5f, py + 0.5f);
-                if (PointInTri(p, a, b, c))
-                    pixels[py * size + px] = white;
-            }
+        for (int px = minPx; px <= maxPx; px++)
+        {
+            var p = new Vector2(px + 0.5f, py + 0.5f);
+            if (PointInTri(p, a, b, c))
+            pixels[py * size + px] = white;
+        }
     }
 
     private static bool PointInTri(Vector2 p, Vector2 a, Vector2 b, Vector2 c)

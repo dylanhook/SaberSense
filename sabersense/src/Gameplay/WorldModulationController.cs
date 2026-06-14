@@ -2,7 +2,6 @@
 // Licensed under the SaberSense Proprietary License. See LICENSE file in the project root.
 
 using SaberSense.Configuration;
-using SaberSense.Core;
 using SaberSense.Core.Logging;
 using SaberSense.Core.Utilities;
 using System;
@@ -64,7 +63,7 @@ internal sealed class WorldModulationController : IInitializable, ITickable, IDi
 
     private const float StrengthMax = 100f;
 
-    private readonly ModSettings _config;
+    private readonly ModSettings _settings;
     private readonly ViewVisibilityService? _viewVis;
     private readonly IModLogger _log;
 
@@ -75,9 +74,9 @@ internal sealed class WorldModulationController : IInitializable, ITickable, IDi
     private WorldModConfig? _subscribedWorldMod;
     private Camera? _cachedCamera;
 
-    public WorldModulationController(ModSettings config, ShaderRegistry shaders, IModLogger log, [InjectOptional] ViewVisibilityService? viewVis)
+    public WorldModulationController(ModSettings settings, ShaderRegistry shaders, IModLogger log, [InjectOptional] ViewVisibilityService? viewVis)
     {
-        _config = config;
+        _settings = settings;
         _viewVis = viewVis;
         _log = log.ForSource(nameof(WorldModulationController));
         _materialFactory = new(shaders);
@@ -87,11 +86,11 @@ internal sealed class WorldModulationController : IInitializable, ITickable, IDi
     {
         _root = new GameObject("WorldModulation");
 
-        if (_config is not null)
+        if (_settings is not null)
         {
-            _config.PropertyChanged += OnConfigChanged;
-            if (_config.Visibility is not null)
-                _config.Visibility.PropertyChanged += OnVisibilityChanged;
+            _settings.PropertyChanged += OnConfigChanged;
+            if (_settings.Visibility is not null)
+            _settings.Visibility.PropertyChanged += OnVisibilityChanged;
             ResubscribeWorldMod();
             Rebuild();
         }
@@ -103,7 +102,7 @@ internal sealed class WorldModulationController : IInitializable, ITickable, IDi
 
         if (_cachedCamera == null) _cachedCamera = Camera.main;
         if (_cachedCamera != null)
-            _root.transform.position = _cachedCamera.transform.position;
+        _root.transform.position = _cachedCamera.transform.position;
 
         _networkEmitter?.Tick(Time.deltaTime, _cachedCamera != null ? _cachedCamera.transform.position : Vector3.zero);
     }
@@ -112,17 +111,17 @@ internal sealed class WorldModulationController : IInitializable, ITickable, IDi
     {
         try
         {
-            if (_config is not null)
+            if (_settings is not null)
             {
-                _config.PropertyChanged -= OnConfigChanged;
-                if (_config.Visibility is not null)
-                    _config.Visibility.PropertyChanged -= OnVisibilityChanged;
+                _settings.PropertyChanged -= OnConfigChanged;
+                if (_settings.Visibility is not null)
+                _settings.Visibility.PropertyChanged -= OnVisibilityChanged;
                 if (_subscribedWorldMod is not null)
-                    _subscribedWorldMod.PropertyChanged -= OnWorldModChanged;
+                _subscribedWorldMod.PropertyChanged -= OnWorldModChanged;
                 _subscribedWorldMod = null;
             }
             if (_root != null)
-                UnityEngine.Object.Destroy(_root);
+            UnityEngine.Object.Destroy(_root);
             _activeSystems.Clear();
             _networkEmitter = null;
             _materialFactory.Dispose();
@@ -142,9 +141,10 @@ internal sealed class WorldModulationController : IInitializable, ITickable, IDi
             return;
         }
 
-        if (e.PropertyName.StartsWith("WorldMod") ||
-            e.PropertyName.StartsWith("Visibility"))
-            Rebuild();
+        if (e.PropertyName == "Visibility" ||
+        e.PropertyName.StartsWith("WorldMod.") ||
+        e.PropertyName.StartsWith("Visibility."))
+        Rebuild();
     }
 
     private void OnVisibilityChanged(object sender, PropertyChangedEventArgs e) => Rebuild();
@@ -154,12 +154,12 @@ internal sealed class WorldModulationController : IInitializable, ITickable, IDi
     private void ResubscribeWorldMod()
     {
         if (_subscribedWorldMod is not null)
-            _subscribedWorldMod.PropertyChanged -= OnWorldModChanged;
+        _subscribedWorldMod.PropertyChanged -= OnWorldModChanged;
 
-        _subscribedWorldMod = _config?.WorldMod;
+        _subscribedWorldMod = _settings?.WorldMod;
 
         if (_subscribedWorldMod is not null)
-            _subscribedWorldMod.PropertyChanged += OnWorldModChanged;
+        _subscribedWorldMod.PropertyChanged += OnWorldModChanged;
     }
 
     private static float StrengthCurve(float strength)
@@ -182,8 +182,8 @@ internal sealed class WorldModulationController : IInitializable, ITickable, IDi
         col.enabled = true;
         var gradient = new Gradient();
         gradient.SetKeys(
-            [new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.white, 1f)],
-            alphaKeys
+        [new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.white, 1f)],
+        alphaKeys
         );
         col.color = gradient;
     }
@@ -197,21 +197,21 @@ internal sealed class WorldModulationController : IInitializable, ITickable, IDi
         _activeSystems.Clear();
         _networkEmitter = null;
 
-        if (_root == null || _config is null) return;
-        if (!_config.WorldMod.Enabled) return;
+        if (_root == null || _settings is null) return;
+        if (!_settings.WorldMod.Enabled) return;
 
-        var modes = _config.WorldMod.Modes;
+        var modes = _settings.WorldMod.Modes;
         if (modes is null || modes.Count is 0) return;
 
-        if (modes.Contains(WorldModulationOptions.MenuOnly) &&
-            UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "GameCore")
-            return;
+        if (_settings.WorldMod.MenuOnly &&
+        UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "GameCore")
+        return;
 
-        float s = StrengthCurve(_config.WorldMod.Strength);
+        float s = StrengthCurve(_settings.WorldMod.Strength);
 
         foreach (var mode in modes)
         {
-            if (mode >= 3) continue;
+            if (!WorldModulationOptions.IsMode(mode)) continue;
             if (_activeSystems.ContainsKey(mode)) continue;
 
             GameObject? modeRoot = mode switch
@@ -261,8 +261,8 @@ internal sealed class WorldModulationController : IInitializable, ITickable, IDi
         noise.quality = ParticleSystemNoiseQuality.Low;
 
         SetupFadeGradient(ps, [
-            new GradientAlphaKey(0.1f, 0f), new GradientAlphaKey(0.9f, 0.05f),
-            new GradientAlphaKey(0.9f, 0.8f), new GradientAlphaKey(0f, 1f)
+        new GradientAlphaKey(0.1f, 0f), new GradientAlphaKey(0.9f, 0.05f),
+        new GradientAlphaKey(0.9f, 0.8f), new GradientAlphaKey(0f, 1f)
         ]);
 
         var renderer = go.GetComponent<ParticleSystemRenderer>();
@@ -313,15 +313,15 @@ internal sealed class WorldModulationController : IInitializable, ITickable, IDi
         rotOverLifetime.z = new ParticleSystem.MinMaxCurve(SnowSpinMin, SnowSpinMax);
 
         SetupFadeGradient(ps, [
-            new GradientAlphaKey(0f, 0f), new GradientAlphaKey(0.9f, 0.1f),
-            new GradientAlphaKey(0.9f, 0.65f), new GradientAlphaKey(0f, 1f)
+        new GradientAlphaKey(0f, 0f), new GradientAlphaKey(0.9f, 0.1f),
+        new GradientAlphaKey(0.9f, 0.65f), new GradientAlphaKey(0f, 1f)
         ]);
 
         var sizeOverLifetime = ps.sizeOverLifetime;
         sizeOverLifetime.enabled = true;
         sizeOverLifetime.size = new ParticleSystem.MinMaxCurve(1f, new AnimationCurve(
-            new Keyframe(0f, 0.3f), new Keyframe(0.15f, 1f),
-            new Keyframe(0.75f, 1f), new Keyframe(1f, 0.2f)
+        new Keyframe(0f, 0.3f), new Keyframe(0.15f, 1f),
+        new Keyframe(0.75f, 1f), new Keyframe(1f, 0.2f)
         ));
 
         var renderer = go.GetComponent<ParticleSystemRenderer>();
@@ -336,7 +336,7 @@ internal sealed class WorldModulationController : IInitializable, ITickable, IDi
 
     private GameObject CreateNetworkSystem(float s)
     {
-        _networkEmitter = new(_root!.transform, s, _materialFactory, _config);
+        _networkEmitter = new(_root!.transform, s, _materialFactory, _settings);
         return _networkEmitter.Root;
     }
 
@@ -361,13 +361,13 @@ internal sealed class WorldModulationController : IInitializable, ITickable, IDi
 
     private Color GetOverrideOrDefault(Color defaultColor, WorldModulationMode mode)
     {
-        if (_config is null || !_config.WorldMod.OverrideColor) return defaultColor;
+        if (_settings is null || !_settings.WorldMod.OverrideColor) return defaultColor;
 
         return mode switch
         {
-            WorldModulationMode.Rain => _config.WorldMod.RainColor,
-            WorldModulationMode.Snow => _config.WorldMod.SnowColor,
-            WorldModulationMode.Network => _config.WorldMod.NetworkColor,
+            WorldModulationMode.Rain => _settings.WorldMod.RainColor,
+            WorldModulationMode.Snow => _settings.WorldMod.SnowColor,
+            WorldModulationMode.Network => _settings.WorldMod.NetworkColor,
             _ => defaultColor
         };
     }
